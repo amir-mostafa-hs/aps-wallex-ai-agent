@@ -9,10 +9,10 @@
 پشته پیشنهادی:
 
 - Python 3.12+
-- **LangChain برای لایه تصمیم‌گیری AI**: استفاده از API مدرن `create_agent` و خروجی ساختاریافته مبتنی بر Pydantic؛ نه زنجیره قدیمی/غیرضروری و نه swarm چندعاملی.
+- **LangChain برای لایه تصمیم‌گیری AI**: استفاده از API مدرن `create_agent` و خروجی ساختاریافته با `TypedDict` یا JSON Schema؛ در کد پروژه مدل Pydantic تعریف نمی‌کنیم مگر اینکه نیاز واقعی در پیاده‌سازی ثابت شود.
 - اتصال مدل ابری: اگر provider از API سازگار با OpenAI پشتیبانی می‌کند، adapter مناسب LangChain مثل `langchain-openai`؛ در غیر این صورت integration رسمی همان provider. مدل و provider در config قابل تعویض بمانند.
 - `httpx` برای REST و کتابخانه WebSocket سازگار با مستندات فعلی والکس
-- `pydantic` برای config و schema پاسخ مدل
+- `typing.TypedDict` / `typing_extensions.TypedDict` یا JSON Schema برای قرارداد خروجی Agent؛ اعتبارسنجی معنایی TradeIntent و تنظیمات حساس با توابع ساده و صریح در کد خودمان انجام شود؛ Pydantic dependency مستقیم/الزامی پروژه نیست.
 - `pytest` برای تست، `ruff` برای lint/format، `mypy` در صورت زمان
 - `SQLite` با WAL برای event/trade/decision logs و تنظیمات کوچک
 - `FastAPI` برای health/status/control endpoints و یک صفحه ساده وضعیت
@@ -37,7 +37,7 @@ MarketDataStore -> CandleBuilder -> FeatureEngine -> CandidateScanner
                                                     |
                                                     v
                                        LangChain Decision Agent
-                                       (Pydantic TradeIntent)
+                                       (TypedDict / JSON Schema TradeIntent)
                                       |
                                       v
                           Portfolio/Risk Engine
@@ -75,13 +75,14 @@ MarketDataStore -> CandleBuilder -> FeatureEngine -> CandidateScanner
 
 ### LangChain Decision Agent
 
-- در پیاده‌سازی از API مدرن LangChain (`create_agent`) و خروجی ساختاریافته Pydantic استفاده شود؛ نام دقیق importها با نسخه lock شده package تطبیق داده شود.
+- در پیاده‌سازی از API مدرن LangChain (`create_agent`) و خروجی ساختاریافته با `TypedDict` یا JSON Schema استفاده شود؛ API دقیق را با نسخه lock شده و provider انتخابی تطبیق دهید. مدل Pydantic در کد پروژه تعریف نشود.
 - به‌صورت واقعی بین `momentum`, `trend_following`, `mean_reversion` (یا استراتژی‌های مورد تأیید) انتخاب کند و horizon/پارامترهای محدود را تعیین کند.
-- prompt ثابت نسخه‌دار و پاسخ JSON/schema validation داشته باشد.
+- prompt ثابت نسخه‌دار و پاسخ ساختاریافته داشته باشد؛ علاوه بر schema، اعتبارسنجی زمان اجرا برای enumها، دامنه عددی و رابطه بین فیلدها در Risk Engine انجام شود.
 - context کوچک و متراکم بگیرد، نه کل order book و همه کندل‌ها: آخرین snapshot، ویژگی‌های مشتق‌شده، وضعیت حساب/پوزیشن و هزینه اجرای برآوردی.
 - ابزارهای در دسترس Agent فقط read-only و domain-specific باشند؛ private trading endpoint به Agent داده نشود.
 - timeout، token cost، latency، model/provider version و خروجی validated ثبت شود.
 - فقط `TradeIntent` تولید می‌کند؛ تصمیم نهایی اجرا به Risk Engine واگذار می‌شود.
+- برای کاهش پیچیدگی dependencyها، در کد پروژه از `TypedDict` یا JSON Schema استفاده شود، نه Pydantic models. `TypedDict` به‌تنهایی runtime validation انجام نمی‌دهد؛ بنابراین validator عادی Python باید وجود فیلدهای لازم، نوع‌ها، enumها، حدود عددی، allowlist نمادها و سازگاری action/position را کنترل کند.
 - fallback مدل: `NO_TRADE` یا نگه‌داشتن مدیریت امن موقعیت؛ نه درخواست دوباره نامحدود.
 
 ### Portfolio Allocator / Risk Engine

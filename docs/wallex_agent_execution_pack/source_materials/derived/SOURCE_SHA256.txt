@@ -1,0 +1,6 @@
+# SHA-256 of original source materials copied byte-for-byte into this package
+
+e862a40d2112e07683bb52313d0cc423e598f0ac73b2e12caebfa6b0bd265b08  source_materials/originals/assets.md
+3151cb6bb316b3717b529f9b1f8f68f19ac5710231966f0c14207d6ab7dd5c36  source_materials/originals/intro-text.md
+e8c41fa33c1ac7e8b766be1641d7f3ba496745375ab8ff81875d8c006ce2406c  source_materials/originals/task.md
+a133e78ff025272e2ec3b62816b0e788ad7c4fee8bf757a3ff3c5229de442501  source_materials/originals/هکاتون استارکوچ _ والکس.pdf

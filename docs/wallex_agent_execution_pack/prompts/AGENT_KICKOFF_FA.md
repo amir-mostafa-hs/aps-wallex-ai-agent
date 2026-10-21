@@ -4,13 +4,20 @@
 
 ## تصمیم معماری الزامی: LangChain
 
-از LangChain به‌عنوان لایه تصمیم‌گیری Agent استفاده کن. در نسخه اول یک Decision Agent با `create_agent` و خروجی ساختاریافته Pydantic/JSON schema کافی است. اگر provider از OpenAI-compatible API پشتیبانی می‌کند integration سازگار مناسب را به‌کار ببر؛ در غیر این صورت package رسمی provider را انتخاب کن. API دقیق را با نسخه نصب‌شده بررسی کن و dependencyها را lock کن. scheduler، scanner، feature-engine، Portfolio/Risk Engine و Order Executor را کد قطعی و تست‌پذیر نگه دار. ابزارهای LangChain فقط read-only/context tools باشند؛ به مدل امکان مستقیم ثبت/لغو سفارش نده. swarm یا graph پیچیده نساز مگر دلیل فنی مستند وجود داشته باشد.
+از LangChain به‌عنوان لایه تصمیم‌گیری Agent استفاده کن. در نسخه اول یک Decision Agent با `create_agent` و خروجی ساختاریافته مبتنی بر `TypedDict` یا JSON Schema کافی است؛ در کد پروژه مدل Pydantic تعریف نکن مگر اینکه blocker فنی مستند و تأییدشده وجود داشته باشد. اگر provider از OpenAI-compatible API پشتیبانی می‌کند integration سازگار مناسب را به‌کار ببر؛ در غیر این صورت package رسمی provider را انتخاب کن. API دقیق را با نسخه نصب‌شده بررسی کن و dependencyها را lock کن. scheduler، scanner، feature-engine، Portfolio/Risk Engine و Order Executor را کد قطعی و تست‌پذیر نگه دار. ابزارهای LangChain فقط read-only/context tools باشند؛ به مدل امکان مستقیم ثبت/لغو سفارش نده. swarm یا graph پیچیده نساز مگر دلیل فنی مستند وجود داشته باشد.
+
+## واقعیت‌های حساب اعتباری که از منبع اصلی استخراج شده‌اند
+
+- PDF می‌گوید طرح شامل ۰ تومان دارایی ورودی + ۵,۰۰۰,۰۰۰ تومان اعتبار دریافتی برای ۳ روز است؛ ۵ میلیون را به‌عنوان سرمایه شخصی + اعتبار دوباره حساب نکن.
+- PDF ساخت/مدیریت API را برای حساب اعتباری فعال نشان می‌دهد، اما قابلیت بومی بات معامله‌گر/معامله تعهدی را فعال نشان نمی‌دهد.
+- PDF هشدار liquidation می‌دهد و می‌گوید در صورت liquidation هیچ دارایی یا مبلغی بازنمی‌گردد. fee دقیق اعتبار سه‌روزه و liquidation threshold را قبل Live تأیید کن.
+- `task.md` درباره realized Toman/no coin at end و در عین حال final equity/unrealized P&L صحبت می‌کند؛ هر دو را جدا گزارش کن و ساعت رسمی پایان را تأیید کن.
 
 ## قوانین غیرقابل‌مذاکره
 
 1. هیچ endpoint، param، auth header یا response shape والکس را حدس نزن. مستند فعلی `https://developers.wallex.ir/docs` را بخوان و نتیجه را در `docs/WALLEX_API_NOTES.md` ثبت کن. اول read-only Spike.
 2. API Keyها را فقط از environment بخوان؛ هرگز چاپ، commit یا در database/log ذخیره نکن.
-3. `assets.md` باید منبع denylist نمادهای ممنوع/غیرفعال باشد. ابتدا فهرست دقیق را استخراج کن و با فعال‌بودن API و Spot capability تطبیق بده. اگر فایل موجود نیست یا قابل‌خواندن نیست، live trading را block کن و علامت واضح بده.
+3. `source_materials/originals/assets.md` منبع denylist نمادهای غیرفعال حساب اعتباری است؛ `source_materials/derived/inactive_markets.json` خروجی مشتق‌شده شامل ۳۴۵ جفت‌ارز است. hash و فهرست را با اصل تطبیق بده، سپس با current API active Spot markets و capability حساب intersection بساز. اگر منبع یا derived output با hash مورد انتظار منطبق نیست، یا API universe تأیید نشد، live trading را block کن.
 4. رفتار پیش‌فرض `MODE=shadow` است. Live باید علاوه بر `MODE=live` به `LIVE_TRADING_ENABLED=true` و preflight pass نیاز داشته باشد.
 5. AI فقط TradeIntent ساختاریافته تولید می‌کند؛ Risk Engine و Order Executor جدا هستند. هیچ direct call از مدل به private trading endpoint مجاز نیست.
 6. در timeout سفارش، ابتدا reconcile با client ID/order detail؛ retry کور ممنوع.

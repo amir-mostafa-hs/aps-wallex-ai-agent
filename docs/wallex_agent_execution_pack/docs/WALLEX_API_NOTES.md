@@ -37,6 +37,7 @@ For each endpoint capture a sanitized request, sanitized response, API docs URL,
 - [ ] Cancel response does not falsely imply no fill; post-cancel fills are reconciled.
 - [ ] Fee field and currency conversion to Toman verified.
 - [ ] Endpoint rate limits and WebSocket retry/reconnect policy documented.
+- [ ] روش اجرای stop-loss برای Spot account تأیید شده (سفارش شرطی exchange-side در صورت پشتیبانی یا watchdog محلی دارای تست) و recovery آن مستند شده است.
 - [ ] Historical candle depth is sufficient for the claimed backtest period.
 
 
@@ -49,3 +50,15 @@ For each endpoint capture a sanitized request, sanitized response, API docs URL,
 - Spot order create reference: https://developers.wallex.ir/spot/createorder — مسیر نشان‌داده‌شده `POST /v1/account/orders` است؛ فقط پس از تطبیق با بخش جاری مستند و حساب اعتباری استفاده کنید.
 
 **نکته:** داده کندل معمولاً به‌صورت OHLCV عددی به دست می‌آید؛ تصویر چارت را لازم نداریم. اگر فقط کندل ۱ دقیقه‌ای تأیید شد، تایم‌فریم‌های ۵/۱۵ دقیقه‌ای با aggregation محلی ساخته شوند. تمام cadenceهای درج‌شده در `MARKET_SCANNING_DECISION_LOGIC_FA.md` پیشنهادهای آغازین هستند و نباید بدون سنجش نرخ درخواست/تأخیر به عنوان سقف یا مقدار بهینه فرض شوند.
+
+
+## تصمیم MCP در MVP
+
+- مسیر اصلی اجرا و تطبیق سفارش در MVP، API مستقیم والکس از طریق `WallexAdapter` است تا timeout، retry، شناسه سفارش و پاسخ‌های اجرا مستقیماً کنترل/تست شوند.
+- MCP می‌تواند بعداً برای اتصال استاندارد Agent به ابزارهای فقط‌خواندنی ارزیابی شود؛ در MVP به Agent ابزار ارسال/لغو سفارش نمی‌دهیم.
+- در مستند MCP درباره تأیید قبل از عملیات حساس توضیحاتی وجود دارد؛ تا وقتی رفتار واقعی و محدودیت‌های آن برای اجرای خودکار روشن/آزمایش نشده، MCP را جایگزین قطعی execution adapter فرض نکنید.
+
+## وضعیت منبع و زمان تأیید
+
+- صفحه اصلی رسمی API در بازبینی اسناد در تاریخ 2026-10-22 قابل دسترسی بود: https://developers.wallex.ir/docs؛ این صفحه بخش‌های Spot، اعتبار معاملاتی و WebSocket را فهرست می‌کند.
+- بازشدن صفحه مستندات به معنی تأیید همه endpointها، permissionها یا rate limitها نیست. هر ردیف جدول بالا تا ثبت response fixture و تست، `Confirmed=NO` می‌ماند.

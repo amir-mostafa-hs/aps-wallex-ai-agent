@@ -12,6 +12,11 @@
 
 ### ساعت ۰ تا ۲ — شروع Repo و Spike فنی [P0]
 
+- [ ] چهار منبع را از `source_materials/originals/` بخوان و hashها را بررسی کن؛ denylist JSON مشتق‌شده از assets باید با اصل ۳۴۵ جفت‌ارز تطبیق داده شود.
+- [ ] PDF طرح اعتباری را مرور کن: ۰ تومان دارایی ورودی + ۵ میلیون اعتبار سه‌روزه، API در credit فعال، fee level 1، و ریسک liquidation. fee واقعی ۳روزه و threshold لیکوییدیشن را از حساب/برگزارکننده تأیید کن.
+- [ ] تضاد احتمالی پایان مسابقه را بررسی کن: `task.md` realized Toman/no coin at end را می‌خواهد اما valuation نهایی/unrealized P&L هم در فرمول آمده. ساعت رسمی پایان و سیاست خروج/تبدیل را تأیید کن.
+- [ ] وضعیت repo و فایل‌ها را بررسی کن.
+
 - [ ] ساخت Git repo و branch اصلی، `.gitignore`, `pyproject.toml`, `.env.example` و logging پایه.
 - [ ] نصب و اجرای Matt Pocock skills (در صورت سازگاری ابزار): `npx skills@latest add mattpocock/skills`.
 - [ ] خواندن مستند فعلی Wallex API، ثبت endpointها و schemaها در `docs/WALLEX_API_NOTES.md`.
@@ -20,7 +25,7 @@
 - [ ] استخراج دقیق نمادهای ممنوع از `assets.md` و ذخیره در config versioned؛ فهرست مجاز نهایی از intersection API-active Spot و denylist ساخته شود.
 - [ ] تأیید min quantity/notional، tick size، step size، endpointهای order details/cancel و محدودیت درخواست.
 - [ ] شناسایی تاریخچه کندل و داده کافی برای Backtest. اگر موجود نبود، مانع را ثبت و مسیر fallback مشخص کن.
-- [ ] LangChain را با adapter درست برای LLM API کاربر اضافه کن؛ `TradeIntent` ساختاریافته Pydantic را smoke-test کن. هیچ ابزار معامله خصوصی به Agent نده.
+- [ ] LangChain را با adapter درست برای LLM API کاربر اضافه کن؛ `TradeIntent` ساختاریافته را با `TypedDict` یا JSON Schema smoke-test کن. هیچ ابزار معامله خصوصی به Agent نده و در کد پروژه مدل Pydantic تعریف نکن.
 - [ ] endpoint کندل را در docs فعلی تأیید کن؛ فقط به نمونه قدیمی `/v1/udf/history` تکیه نکن. اگر endpoint 5m/15m تأیید نشد، از کندل 1m، locally resample کن.
 
 **خروجی ساعت ۲:** یادداشت API با نمونه پاسخ‌های sanitized، market denylist بررسی‌شده، `.env.example`، فهرست موانع. اگر API حساب اعتباری کار نمی‌کند، بقیه کار به Mock/Shadow local ادامه یابد و Live متوقف بماند.
@@ -28,7 +33,7 @@
 ### ساعت ۲ تا ۶ — Vertical slice داده تا ذخیره‌سازی [P0]
 
 - [ ] پیاده‌سازی `WallexAdapter` برای لیست بازار، balance، market data و order lookup/cancel/create (در ابتدا create فقط پشت live guard).
-- [ ] مدل‌های typed با Pydantic و validation پاسخ API.
+- [ ] مدل‌های داخلی با `dataclass`/`TypedDict` و validation صریح پاسخ API؛ داده بیرونی قبل از ورود به سیستم بررسی شود.
 - [ ] SQLite با WAL و جدول‌های حداقلی: `market_snapshot`, `candidate`, `ai_decision`, `risk_event`, `order`, `fill`, `position`, `system_event`.
 - [ ] همه timestampها UTC؛ raw secrets هرگز وارد DB/log نشوند.
 - [ ] یک CLI/command اجرا شود که بازارهای مجاز و balance را چاپ کند و snapshot را DB بنویسد.
@@ -51,7 +56,7 @@
 ### ساعت ۱۰ تا ۱۳ — AI Decision Service [P0]
 
 - [ ] تعریف schema نسخه‌دار برای `TradeIntent`.
-- [ ] اجرای یک فراخوانی LangChain Agent روی top Candidateها؛ ورودی شامل ویژگی‌ها و context محدود؛ خروجی Pydantic/JSON schema اعتبارسنجی شود.
+- [ ] اجرای یک فراخوانی LangChain Agent روی top Candidateها؛ ورودی شامل ویژگی‌ها و context محدود؛ خروجی `TypedDict`/JSON Schema و سپس validator قطعی اعتبارسنجی شود.
 - [ ] اجازه انتخاب strategy/horizon و پارامترهای bounded؛ هیچ call مستقیم به trade API از مدل.
 - [ ] اعتبارسنجی JSON، timeout، retry محدود، هزینه/latency log و fallback به NO_TRADE.
 - [ ] ثبت مدل، prompt version، ورودی/خروجی sanitized و rationale.

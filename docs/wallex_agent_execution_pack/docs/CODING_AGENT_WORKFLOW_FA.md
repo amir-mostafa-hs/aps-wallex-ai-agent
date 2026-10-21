@@ -4,7 +4,7 @@
 
 - Codex یا Antigravity را روی یک Git repo واحد استفاده کنید.
 - یک Coding Agent در هر لحظه مالک تغییرات معماری/فایل‌های مشترک باشد؛ موازی‌سازی فقط برای taskهایی که interface آنها مشخص و جداست.
-- هر task باید یک رفتار قابل‌دمو، معیار پذیرش و تست داشته باشد.
+- هر task باید یک رفتار قابل‌دمو، معیار پذیرش و تست داشته باشد. Skill chain پیشنهادی بر مبنای صفحه رسمی فعلی AI Hero است: `/setup-matt-pocock-skills` در صورت نیاز → `/to-spec` (اگر Spec issue لازم است) → `/to-tickets` → `/implement` برای هر ticket جداگانه → TDD در مرز تست توافق‌شده → `/code-review`. برای Antigravity سازگاری مستقیم را تست کنید و فرض نگیرید.
 - به‌جای prompt بزرگ «کل ربات را بساز»، یک vertical slice کوچک بسازید، تست کنید و سپس توسعه دهید.
 - تغییرات کوچک commit شوند؛ پس از هر milestone اجرای تست‌ها و بازبینی diff اجباری باشد.
 
@@ -18,7 +18,7 @@
 npx skills@latest add mattpocock/skills
 ```
 
-مهارت‌های مفید برای این پروژه:
+مهارت‌های مفید برای این پروژه (نام/موجودبودن هر skill را در نسخه نصب‌شده بررسی کنید):
 
 - `/setup-matt-pocock-skills` — راه‌اندازی repo/زبان مشترک برای Agentها.
 - `/to-spec` — ثبت تصمیم‌های توافق‌شده در Spec؛ برای پروژه چندمرحله‌ای.
@@ -33,8 +33,8 @@ npx skills@latest add mattpocock/skills
 
 ## 3. Sequence پیشنهادی
 
-1. **ثبت context:** این بسته، `assets.md` و لینک‌های رسمی Wallex را به Agent بدهید. بخواهید قبل از کد، endpointها را از مستند رسمی تأیید کند و هیچ endpoint/schema را حدس نزند.
-2. **Spec:** از `docs/SPEC_FA.md` به‌عنوان source of truth استفاده کنید؛ تصمیم‌های جدید را به آن اضافه کنید، نه به promptهای پراکنده.
+1. **ثبت context:** این بسته، `assets.md` اصلی و لینک‌های رسمی Wallex را به Agent بدهید؛ قرارداد یگانه Agent در `docs/AGENT_CONTRACT_FA.md` و شکاف منابع در `docs/SOURCE_MATERIALS_AND_GAPS_FA.md` را هم بخواند. بخواهید قبل از کد، endpointها را از مستند رسمی تأیید کند و هیچ endpoint/schema را حدس نزند.
+2. **Spec:** `docs/DECISION_REGISTER_FA.md` تصمیم‌های کاربر و `docs/SPEC_FA.md` نیازمندی محصول را نگه می‌دارند؛ `docs/AGENT_CONTRACT_FA.md` مرجع واحد schema است. تصمیم‌های جدید را به اسناد ثبت کنید، نه promptهای پراکنده.
 3. **Ticketing:** اگر workflow مهارت‌ها tracker راه‌اندازی می‌خواهد، local Markdown tickets یا issue tracker را configure کنید؛ سپس `/to-tickets` و blockers را مرور کنید.
 4. **Vertical slice اول:** API read-only → market universe → DB event → snapshot/status.
 5. **Vertical slice دوم:** Candidate → AI JSON → risk decision → Shadow fill → P&L record.

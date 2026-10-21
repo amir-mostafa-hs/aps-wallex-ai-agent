@@ -82,7 +82,7 @@
 - تعداد کل معاملات بسته‌شده، تعداد برد/باخت و win rate.
 - gross realized P&L، fees، net realized P&L، سود/زیان متوسط معامله، expectancy و profit factor.
 - حجم معامله (turnover) با توضیح تعریف gross buy+sell؛ از دو بار شمردن مقدارهای پرشده برای معیارهایی که حجم را طور دیگری تعریف می‌کنند اجتناب شود.
-- equity curve / realized P&L curve و حداکثر drawdown با روش محاسبه مشخص.
+- equity curve مبتنی بر ارزش‌گذاری حساب و realized P&L curve به‌صورت جداگانه؛ maximum drawdown باید تعریف روشنی داشته باشد و سود تحقق‌نیافته نباید با realized P&L جمع/اشتباه شود.
 - میانگین/میانه مدت نگهداری، مصرف سرمایه، cash reserve و تعداد پوزیشن هم‌زمان.
 
 ### کیفیت فنی
