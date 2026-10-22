@@ -32,6 +32,7 @@ class RiskEngine:
         warning_limit_tmn: float = 4600000.0,
         maker_fee_rate: float = 0.002,
         taker_fee_rate: float = 0.0025,
+        min_edge_multiplier: float = 1.0,
     ) -> None:
         self.risk_per_trade_equity_pct = risk_per_trade_equity_pct
         self.max_position_notional_equity_pct = max_position_notional_equity_pct
@@ -66,6 +67,7 @@ class RiskEngine:
         self.warning_limit_tmn = norm_warn_limit
         self.maker_fee_rate = maker_fee_rate
         self.taker_fee_rate = taker_fee_rate
+        self.min_edge_multiplier = min_edge_multiplier
 
     def evaluate(
         self,
@@ -184,14 +186,15 @@ class RiskEngine:
 
         # 8. Friction vs expected edge
         friction_pct = (self.taker_fee_rate * 2 * 100.0) + (spread_bps / 100.0)
+        required_edge = friction_pct * self.min_edge_multiplier
         expected_edge = intent["take_profit_distance_pct"] or (stop_pct * 1.5)
-        if expected_edge <= friction_pct:
+        if expected_edge < required_edge:
             return self._reject(
                 decision_id,
                 symbol,
                 action,
-                "NEGATIVE_EDGE",
-                f"Expected edge {expected_edge:.2f}% does not exceed total friction {friction_pct:.2f}%",
+                "EDGE_INSUFFICIENT",
+                f"Expected edge {expected_edge:.2f}% does not meet required minimum {required_edge:.2f}% (friction {friction_pct:.2f}% x {self.min_edge_multiplier:.1f})",
             )
 
         if current_price <= 0:

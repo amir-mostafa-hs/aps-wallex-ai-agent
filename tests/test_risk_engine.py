@@ -216,3 +216,49 @@ def test_risk_engine_rejects_max_positions_reached():
     decision = engine.evaluate(intent, portfolio, current_price=100.0)
     assert decision["approved"] is False
     assert decision["reject_code"] == "POSITION_LIMIT"
+
+
+def test_risk_engine_rejects_trade_with_insufficient_edge_over_friction():
+    # Taker fee 0.25% per side -> roundtrip 0.50%. Spread 25 bps -> 0.25%.
+    # Total friction = 0.75%.
+    engine = RiskEngine(
+        taker_fee_rate=0.0025,
+        min_edge_multiplier=1.2,  # Requires at least 1.2x friction = 0.90%
+    )
+    portfolio: PortfolioState = {
+        "total_equity_tmn": 5000000.0,
+        "available_cash_tmn": 5000000.0,
+        "open_positions": {},
+        "open_orders": {},
+    }
+
+    # Case 1: Tiny profit target 0.40% (less than friction 0.75%)
+    intent_insufficient: TradeIntent = {
+        "contract_version": "1.0",
+        "decision_id": "dec-fric-1",
+        "cycle_id": "cyc-01",
+        "symbol": "USDTTMN",
+        "action": "BUY",
+        "strategy_id": "momentum",
+        "horizon_profile": "FAST",
+        "confidence": 0.8,
+        "reason_code": "SIGNAL_VALID",
+        "decision_rationale": "Small edge",
+        "invalidation_condition": "Drop",
+        "stop_distance_pct": 0.5,
+        "take_profit_distance_pct": 0.40,  # 0.4% << 0.75%
+        "max_holding_minutes": 5,
+        "parameter_overrides": {},
+        "evidence_ids": ["ev-1"],
+    }
+    decision = engine.evaluate(intent_insufficient, portfolio, current_price=70000.0, spread_bps=25.0)
+    assert decision["approved"] is False
+    assert decision["reject_code"] == "EDGE_INSUFFICIENT"
+
+    # Case 2: Healthy profit target 2.5% (> 0.90%)
+    intent_healthy = dict(intent_insufficient)
+    intent_healthy["take_profit_distance_pct"] = 2.5
+    decision_ok = engine.evaluate(intent_healthy, portfolio, current_price=70000.0, spread_bps=25.0)
+    assert decision_ok["approved"] is True
+    assert decision_ok["reject_code"] is None
+
