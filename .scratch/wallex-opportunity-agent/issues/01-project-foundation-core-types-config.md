@@ -7,13 +7,13 @@ Set up the fundamental Python package skeleton, automated test environment (`pyt
 None (can start immediately)
 
 **Status:**
-ready-for-agent
+resolved
 
 ## Acceptance Criteria
 
-- [ ] Python project structure is established with a clean src layout, test suite configuration, and linting rules.
-- [ ] Environment configuration loader safely parses trading variables, API credentials, risk limits, and execution modes with fail-closed defaults.
-- [ ] Domain models are defined using `typing.TypedDict` and JSON Schema definitions covering all lifecycle entities.
-- [ ] Explicit semantic validator functions validate field types, enum values, value ranges, and required relationships in pure Python.
-- [ ] Zero domain Pydantic models are imported or declared in domain code.
-- [ ] Unit tests verify configuration loading, default fallbacks, and schema validation across valid and invalid inputs.
+- [x] Python project structure is established with a clean src layout, test suite configuration, and linting rules.
+- [x] Environment configuration loader safely parses trading variables, API credentials, risk limits, and execution modes with fail-closed defaults.
+- [x] Domain models are defined using `typing.TypedDict` and JSON Schema definitions covering all lifecycle entities.
+- [x] Explicit semantic validator functions validate field types, enum values, value ranges, and required relationships in pure Python.
+- [x] Zero domain Pydantic models are imported or declared in domain code.
+- [x] Unit tests verify configuration loading, default fallbacks, and schema validation across valid and invalid inputs.
