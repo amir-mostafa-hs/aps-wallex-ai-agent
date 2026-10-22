@@ -1,0 +1,27 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wallex-opportunity-agent
+    restart: unless-stopped
+    ports:
+      - "${DASHBOARD_PORT:-8000}:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - PYTHONPATH=/app/src
+      - DASHBOARD_BIND=0.0.0.0
+      - DASHBOARD_PORT=8000
+      - SQLITE_DB_PATH=/app/data/wallex_agent.db
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./docs/sources:/app/docs/sources:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
