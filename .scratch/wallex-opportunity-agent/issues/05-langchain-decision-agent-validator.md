@@ -7,17 +7,17 @@ A dedicated AI Decision Agent orchestrated via LangChain's modern `create_agent`
 01: Project Foundation, Core Types & Config
 
 **Status:**
-ready-for-agent
+resolved
 
 ## Acceptance Criteria
 
-- [ ] Decision Agent is orchestrated with LangChain using a versioned system prompt and structured output schema.
-- [ ] Contract limits outputs strictly to approved enums:
+- [x] Decision Agent is orchestrated with LangChain using a versioned system prompt and structured output schema.
+- [x] Contract limits outputs strictly to approved enums:
   - `action`: `NO_TRADE`, `BUY`, `HOLD`, `EXIT`
   - `strategy_id`: `momentum`, `trend_following`, `mean_reversion`, or `null`
   - `horizon_profile`: `FAST`, `INTRADAY_SHORT`, `INTRADAY`, or `null`
   - `reason_code`: `EDGE_INSUFFICIENT`, `SIGNAL_VALID`, `SIGNAL_INVALIDATED`, `RISK_CONTEXT`, `DATA_UNCERTAIN`, `OTHER`
-- [ ] Pure Python validator verifies schema conformity, numerical bounds (confidence 0..1, positive stop distances), evidence ID existence, and non-empty rationale.
-- [ ] Agent has strictly zero private exchange API keys or order dispatch tools.
-- [ ] Any LLM timeout, malformed JSON, or out-of-range value cleanly falls back to `NO_TRADE` (for candidates) or `HOLD` (for existing positions).
-- [ ] Tests verify structured output parsing, validator rules, and fallback safety behavior with mocked LLM responses.
+- [x] Pure Python validator verifies schema conformity, numerical bounds (confidence 0..1, positive stop distances), evidence ID existence, and non-empty rationale.
+- [x] Agent has strictly zero private exchange API keys or order dispatch tools.
+- [x] Any LLM timeout, malformed JSON, or out-of-range value cleanly falls back to `NO_TRADE` (for candidates) or `HOLD` (for existing positions).
+- [x] Tests verify structured output parsing, validator rules, and fallback safety behavior with mocked LLM responses.
