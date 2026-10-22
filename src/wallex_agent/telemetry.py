@@ -208,3 +208,44 @@ class TelemetryStore:
                 "post_mortem_notes": r["post_mortem_notes"],
             })
         return trades
+
+    def get_performance_summary(self) -> dict[str, Any]:
+        """Calculates aggregate performance statistics across all recorded trades."""
+        trades = self.get_recent_trades(limit=10000)
+        total_trades = len(trades)
+        if total_trades == 0:
+            return {
+                "total_trades": 0,
+                "winning_trades": 0,
+                "losing_trades": 0,
+                "win_rate_pct": 0.0,
+                "net_realized_pnl_tmn": 0.0,
+                "total_fees_tmn": 0.0,
+                "max_drawdown_pct": 0.0,
+            }
+        winning = [t for t in trades if t["net_realized_pnl_tmn"] > 0]
+        losing = [t for t in trades if t["net_realized_pnl_tmn"] < 0]
+        net_pnl = sum(t["net_realized_pnl_tmn"] for t in trades)
+        fees = sum(t["total_fee_tmn"] for t in trades)
+        win_rate = (len(winning) / total_trades) * 100.0
+
+        cumulative = 0.0
+        peak = 0.0
+        max_dd = 0.0
+        for t in reversed(trades):
+            cumulative += t["net_realized_pnl_tmn"]
+            if cumulative > peak:
+                peak = cumulative
+            dd = peak - cumulative
+            if dd > max_dd:
+                max_dd = dd
+
+        return {
+            "total_trades": total_trades,
+            "winning_trades": len(winning),
+            "losing_trades": len(losing),
+            "win_rate_pct": win_rate,
+            "net_realized_pnl_tmn": net_pnl,
+            "total_fees_tmn": fees,
+            "max_drawdown_pct": (max_dd / 5000000.0) * 100.0 if max_dd > 0 else 0.0,
+        }
