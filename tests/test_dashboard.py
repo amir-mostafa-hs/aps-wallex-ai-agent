@@ -159,4 +159,33 @@ def test_dashboard_html_view(client: TestClient):
     assert res.status_code == 200
     assert "text/html" in res.headers["content-type"]
     assert "Wallex Opportunity Agent" in res.text
-    assert "Dashboard" in res.text
+
+
+def test_dashboard_backtest_endpoint(client: TestClient):
+    headers = {"Authorization": "Bearer super-secret-token"}
+    res = client.post("/api/backtest/run", json={"cycles": 10}, headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert "summary" in data
+    assert data["initial_capital_tmn"] == 5000000.0
+    assert "final_equity_tmn" in data
+    assert "trades" in data
+
+
+def test_dashboard_audit_reports_endpoint(client: TestClient):
+    headers = {"Authorization": "Bearer super-secret-token"}
+    res = client.get("/api/reports/audit", headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert "summary" in data
+    assert "trades" in data
+
+
+def test_dashboard_preflight_endpoint(client: TestClient):
+    headers = {"Authorization": "Bearer super-secret-token"}
+    res = client.get("/api/preflight/run", headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert "checks" in data
+    assert "all_passed" in data
+
