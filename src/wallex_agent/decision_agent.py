@@ -1,6 +1,9 @@
 """LangChain Decision Agent and structured TradeIntent generation."""
 from __future__ import annotations
+import os
+import json
 import uuid
+import httpx
 from typing import Any, Mapping
 from wallex_agent.domain.types import TradeIntent
 from wallex_agent.domain.validation import validate_trade_intent, ValidationError
@@ -61,11 +64,85 @@ TRADE_INTENT_JSON_SCHEMA = {
 }
 
 
+class HTTPOpenAIClient:
+    """Zero-dependency HTTP client for OpenAI-compatible LLM endpoints."""
+
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str = "https://ai.boxapi.ir/ai/v1",
+        model: str = "gpt-6-luna",
+        timeout: float = 30.0,
+    ) -> None:
+        self.api_key = api_key
+        self.base_url = base_url.rstrip("/")
+        self.model = model
+        self.timeout = timeout
+
+    def invoke(self, prompt_input: Mapping[str, Any]) -> dict[str, Any]:
+        url = f"{self.base_url}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        system_content = prompt_input.get("system", SYSTEM_PROMPT)
+        context_data = prompt_input.get("context", {})
+
+        user_content = (
+            f"Evaluate trading opportunity for context:\n{json.dumps(context_data, ensure_ascii=False)}\n"
+            "Return JSON matching TradeIntent with keys: contract_version, decision_id, cycle_id, symbol, action, "
+            "strategy_id, horizon_profile, confidence, reason_code, decision_rationale, invalidation_condition, "
+            "stop_distance_pct, take_profit_distance_pct, max_holding_minutes, parameter_overrides, evidence_ids."
+        )
+
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": user_content},
+            ],
+            "response_format": {"type": "json_object"},
+        }
+
+        resp = httpx.post(url, json=payload, headers=headers, timeout=self.timeout)
+        if resp.status_code != 200:
+            raise RuntimeError(f"LLM API status {resp.status_code}: {resp.text[:200]}")
+        data = resp.json()
+        content = data["choices"][0]["message"]["content"]
+        raw_dict = json.loads(content)
+
+        # Normalize reason_code if model returned free text
+        valid_reasons = {"EDGE_INSUFFICIENT", "SIGNAL_VALID", "SIGNAL_INVALIDATED", "RISK_CONTEXT", "DATA_UNCERTAIN", "OTHER"}
+        if raw_dict.get("reason_code") not in valid_reasons:
+            raw_dict["reason_code"] = "OTHER"
+
+        # Sanitize parameter_overrides
+        if isinstance(raw_dict.get("parameter_overrides"), dict):
+            allowed_keys = {"stop_distance_pct", "take_profit_distance_pct", "max_holding_minutes"}
+            raw_dict["parameter_overrides"] = {
+                k: v for k, v in raw_dict["parameter_overrides"].items()
+                if k in allowed_keys and isinstance(v, (int, float)) and v > 0
+            }
+        else:
+            raw_dict["parameter_overrides"] = {}
+
+        return raw_dict
+
+
 class DecisionAgent:
     """Orchestrates structured AI trading decisions with zero private execution access."""
 
     def __init__(self, llm_client: Any = None, heuristic_mode: bool = False) -> None:
-        self.llm_client = llm_client
+        if llm_client is None and not heuristic_mode:
+            llm_key = os.getenv("LLM_API_KEY", "").strip()
+            if llm_key:
+                base_url = os.getenv("LLM_BASE_URL", "https://ai.boxapi.ir/ai/v1")
+                model = os.getenv("LLM_MODEL", "gpt-6-luna")
+                self.llm_client = HTTPOpenAIClient(api_key=llm_key, base_url=base_url, model=model)
+            else:
+                self.llm_client = None
+        else:
+            self.llm_client = llm_client
         self.heuristic_mode = heuristic_mode
 
     def decide(self, context: Mapping[str, Any]) -> TradeIntent:
