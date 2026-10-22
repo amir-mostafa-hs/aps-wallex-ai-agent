@@ -348,7 +348,7 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
 """
 
 
-def create_dashboard_app(harness: SystemTradingHarness, auth_token: str = "secret-token") -> FastAPI:
+def create_dashboard_app(harness: SystemTradingHarness, auth_token: str = "super-secret-token") -> FastAPI:
     """Creates a FastAPI dashboard application bound to a SystemTradingHarness instance."""
     app = FastAPI(title="Wallex Opportunity Agent Dashboard")
 

@@ -145,7 +145,7 @@ def run_shadow_cmd(args: argparse.Namespace) -> int:
         initial_prices={"BTCTMN": 4500000000.0, "ETHTMN": 250000000.0, "USDTTMN": 70000.0},
     )
 
-    auth_token = os.environ.get("DASHBOARD_ACCESS_TOKEN", "secret-token")
+    auth_token = (os.environ.get("DASHBOARD_ACCESS_TOKEN") or "").strip() or "super-secret-token"
     dashboard_app = create_dashboard_app(harness=harness, auth_token=auth_token)
 
     port = int(os.environ.get("DASHBOARD_PORT", "8000"))
