@@ -65,9 +65,13 @@ class OrderExecutor:
         ]
         for conf in conflicting:
             try:
-                self.exchange_client.cancel_order(conf["client_id"])
-            except Exception:
-                pass
+                res = self.exchange_client.cancel_order(conf["client_id"])
+                if isinstance(res, Mapping) and res.get("success") is False:
+                    raise ExchangeExecutionError(f"Failed to cancel opposing order {conf['client_id']}: {res}")
+            except ExchangeExecutionError:
+                raise
+            except Exception as e:
+                raise ExchangeExecutionError(f"Exception during opposing order cancellation for {conf['client_id']}: {e}")
             self.remove_open_order(conf["client_id"])
 
         # 2. Quantize quantity and price to exchange step/tick sizes

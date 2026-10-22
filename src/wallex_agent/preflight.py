@@ -82,7 +82,18 @@ class PreflightGate:
             "details": f"API key present and sub-account {sub_account_id} has TRADE permission.",
         }
 
-    def check_allowlist_integrity(self, denylist_path: str = "docs/sources/inactive_markets.json") -> PreflightCheckResult:
+    def check_allowlist_integrity(
+        self,
+        denylist_path: str = "docs/sources/inactive_markets.json",
+        assets_source_path: str = "docs/sources/assets.md",
+    ) -> PreflightCheckResult:
+        if not os.path.exists(assets_source_path):
+            return {
+                "name": "allowlist_integrity",
+                "passed": False,
+                "details": f"Fail-closed: original source file '{assets_source_path}' is missing or unreviewed.",
+            }
+
         if not os.path.exists(denylist_path):
             return {
                 "name": "allowlist_integrity",
@@ -310,6 +321,7 @@ class PreflightGate:
         self,
         target_symbols: Sequence[str] | None = None,
         denylist_path: str = "docs/sources/inactive_markets.json",
+        assets_source_path: str = "docs/sources/assets.md",
     ) -> PreflightReport:
         checks: list[PreflightCheckResult] = []
 
@@ -317,7 +329,12 @@ class PreflightGate:
         checks.append(self.check_api_key_and_subaccount())
 
         # 2. Allowlist integrity
-        checks.append(self.check_allowlist_integrity(denylist_path=denylist_path))
+        checks.append(
+            self.check_allowlist_integrity(
+                denylist_path=denylist_path,
+                assets_source_path=assets_source_path,
+            )
+        )
 
         # 3. Market constraints
         target_syms = target_symbols or ["USDT-TMN", "BTC-TMN"]

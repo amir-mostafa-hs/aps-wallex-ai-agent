@@ -129,6 +129,59 @@ def test_risk_engine_rejects_when_liquidation_floor_approached():
     assert decision["reject_code"] == "LIQUIDATION_RISK"
 
 
+def test_risk_engine_enforces_package_183_liquidation_floor():
+    # Package 183: 5,000,000 TMN credit, liquidation limit 900 per-mille (4,500,000 TMN)
+    # RiskEngine should normalize 900.0 per-mille to 4,500,000.0 TMN
+    engine = RiskEngine(
+        initial_capital_tmn=5000000.0,
+        liquidation_floor_tmn=900.0,  # 900 per-mille from Wallex API
+        warning_limit_tmn=1000.0,
+    )
+    assert engine.liquidation_floor_tmn == 4500000.0
+    assert engine.warning_limit_tmn == 4600000.0
+
+    intent: TradeIntent = {
+        "contract_version": "1.0",
+        "decision_id": "dec-pkg183",
+        "cycle_id": "cyc-01",
+        "symbol": "BTCTMN",
+        "action": "BUY",
+        "strategy_id": "momentum",
+        "horizon_profile": "FAST",
+        "confidence": 0.8,
+        "reason_code": "SIGNAL_VALID",
+        "decision_rationale": "Buy",
+        "invalidation_condition": "Drop",
+        "stop_distance_pct": 1.0,
+        "take_profit_distance_pct": 2.5,
+        "max_holding_minutes": 5,
+        "parameter_overrides": {},
+        "evidence_ids": ["ev-1"],
+    }
+
+    # Case 1: Account has dropped to 4,550,000 TMN (below 4.6M warning buffer, close to 4.5M liquidation floor)
+    # In the old flawed logic, 4,550,000 > 900/1000 so it would have mistakenly approved!
+    danger_portfolio: PortfolioState = {
+        "total_equity_tmn": 4550000.0,
+        "available_cash_tmn": 4550000.0,
+        "open_positions": {},
+        "open_orders": {},
+    }
+    decision = engine.evaluate(intent, danger_portfolio, current_price=1000000.0)
+    assert decision["approved"] is False
+    assert decision["reject_code"] == "LIQUIDATION_RISK"
+
+    # Case 2: Healthy account at 4,900,000 TMN (above warning buffer)
+    healthy_portfolio: PortfolioState = {
+        "total_equity_tmn": 4900000.0,
+        "available_cash_tmn": 4900000.0,
+        "open_positions": {},
+        "open_orders": {},
+    }
+    decision_ok = engine.evaluate(intent, healthy_portfolio, current_price=1000000.0)
+    assert decision_ok["approved"] is True
+
+
 def test_risk_engine_rejects_max_positions_reached():
     engine = RiskEngine(max_open_positions=2)
     portfolio: PortfolioState = {

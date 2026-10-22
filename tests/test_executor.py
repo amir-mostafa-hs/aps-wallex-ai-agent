@@ -139,3 +139,47 @@ def test_self_trade_prevention_cancels_opposing_orders_first():
     # Opposing BUY order must have been cancelled before submitting SELL!
     mock_client.cancel_order.assert_called_once_with("open-buy-1")
     assert sell_order["side"] == "SELL"
+
+
+def test_self_trade_prevention_aborts_when_opposing_cancel_fails():
+    mock_client = MagicMock()
+    mock_client.cancel_order.return_value = {"success": False, "message": "Failed to cancel opposing order"}
+
+    executor = OrderExecutor(exchange_client=mock_client)
+    existing_order: OrderRecord = {
+        "client_id": "open-buy-err",
+        "exchange_order_id": "111",
+        "symbol": "BTCTMN",
+        "side": "BUY",
+        "order_type": "LIMIT",
+        "price": 3900000.0,
+        "quantity": 0.05,
+        "status": "SUBMITTED",
+        "executed_qty": 0.0,
+        "executed_sum": 0.0,
+        "cumulative_fee": 0.0,
+        "created_at": 100.0,
+        "updated_at": 100.0,
+        "fills": [],
+    }
+    executor.register_open_order(existing_order)
+
+    exit_decision: RiskDecision = {
+        "approved": True,
+        "intent_id": "dec-exit",
+        "symbol": "BTCTMN",
+        "action": "EXIT",
+        "approved_quantity": 0.05,
+        "approved_notional": 200000.0,
+        "projected_stop_price": None,
+        "projected_take_profit_price": None,
+        "reject_code": None,
+        "rejection_reason": None,
+    }
+
+    with pytest.raises(Exception, match="cancel"):
+        executor.submit_order(exit_decision, price=4000000.0, price_precision=0, amount_precision=4)
+
+    # Reversal order should NOT have been dispatched
+    mock_client.create_order.assert_not_called()
+

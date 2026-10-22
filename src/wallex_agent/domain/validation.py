@@ -96,6 +96,19 @@ def validate_trade_intent(
         if not invalidation_condition or not str(invalidation_condition).strip():
             raise ValidationError("Action BUY requires non-empty invalidation_condition.")
 
+    raw_overrides = raw.get("parameter_overrides", {})
+    if not isinstance(raw_overrides, Mapping):
+        raise ValidationError("parameter_overrides must be a mapping/dict")
+
+    allowed_override_keys = {"stop_distance_pct", "take_profit_distance_pct", "max_holding_minutes"}
+    validated_overrides: dict[str, Any] = {}
+    for k, v in raw_overrides.items():
+        if k not in allowed_override_keys:
+            raise ValidationError(f"Invalid parameter_overrides key '{k}'. Allowed keys: {allowed_override_keys}")
+        if not isinstance(v, (int, float)) or v <= 0:
+            raise ValidationError(f"Invalid parameter_overrides value for '{k}': must be a positive number (got {v})")
+        validated_overrides[k] = float(v) if "pct" in k else int(v)
+
     return {
         "contract_version": str(raw.get("contract_version", "1.0")),
         "decision_id": str(raw.get("decision_id", "")),
@@ -111,7 +124,7 @@ def validate_trade_intent(
         "stop_distance_pct": float(stop_distance_pct) if stop_distance_pct is not None else None,
         "take_profit_distance_pct": float(take_profit_distance_pct) if take_profit_distance_pct is not None else None,
         "max_holding_minutes": int(max_holding_minutes) if max_holding_minutes is not None else None,
-        "parameter_overrides": dict(raw.get("parameter_overrides", {})),
+        "parameter_overrides": validated_overrides,
         "evidence_ids": [str(eid) for eid in evidence_ids],
     }
 

@@ -27,8 +27,9 @@ class RiskEngine:
         min_cash_reserve_equity_pct: float = 0.50,
         max_open_positions: int = 3,
         min_notional_tmn: float = 100000.0,
-        liquidation_floor_tmn: float = 900.0,
-        warning_limit_tmn: float = 1000.0,
+        initial_capital_tmn: float = 5000000.0,
+        liquidation_floor_tmn: float = 4500000.0,
+        warning_limit_tmn: float = 4600000.0,
         maker_fee_rate: float = 0.002,
         taker_fee_rate: float = 0.0025,
     ) -> None:
@@ -38,8 +39,31 @@ class RiskEngine:
         self.min_cash_reserve_equity_pct = min_cash_reserve_equity_pct
         self.max_open_positions = max_open_positions
         self.min_notional_tmn = min_notional_tmn
-        self.liquidation_floor_tmn = liquidation_floor_tmn
-        self.warning_limit_tmn = warning_limit_tmn
+        self.initial_capital_tmn = initial_capital_tmn
+
+        # Normalize liquidation floor: support ratio (0.90), per-mille (900.0), or exact TMN (4,500,000.0)
+        if 0.0 < liquidation_floor_tmn <= 1.0:
+            norm_liq_floor = liquidation_floor_tmn * initial_capital_tmn
+        elif 1.0 < liquidation_floor_tmn <= 1000.0:
+            norm_liq_floor = (liquidation_floor_tmn / 1000.0) * initial_capital_tmn
+        else:
+            norm_liq_floor = liquidation_floor_tmn
+
+        # Normalize warning limit
+        if 0.0 < warning_limit_tmn <= 1.0:
+            norm_warn_limit = warning_limit_tmn * initial_capital_tmn
+        elif 1.0 < warning_limit_tmn <= 1000.0:
+            norm_warn_limit = (warning_limit_tmn / 1000.0) * initial_capital_tmn
+        else:
+            norm_warn_limit = warning_limit_tmn
+
+        # If warning limit equals or exceeds initial capital (e.g. 1000 per-mille from Wallex API),
+        # set a sensible 20% safety cushion between liquidation floor and baseline equity
+        if norm_warn_limit >= initial_capital_tmn:
+            norm_warn_limit = norm_liq_floor + (initial_capital_tmn - norm_liq_floor) * 0.2
+
+        self.liquidation_floor_tmn = norm_liq_floor
+        self.warning_limit_tmn = norm_warn_limit
         self.maker_fee_rate = maker_fee_rate
         self.taker_fee_rate = taker_fee_rate
 

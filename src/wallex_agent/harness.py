@@ -11,7 +11,7 @@ from wallex_agent.domain.types import (
     Candidate,
 )
 from wallex_agent.universe import MarketUniverse
-from wallex_agent.scanner import CandidateScanner, AICallBudget
+from wallex_agent.scanner import CandidateScanner, AICallBudget, ReviewPriorityQueue, ReviewItem
 from wallex_agent.decision_agent import DecisionAgent
 from wallex_agent.risk_engine import RiskEngine, PortfolioState
 from wallex_agent.executor import OrderExecutor
@@ -100,6 +100,7 @@ class SystemTradingHarness:
         telemetry_store: TelemetryStore,
         initial_prices: Mapping[str, float] | None = None,
         exchange_client: Any = None,
+        max_execution_quote_age_seconds: float = 5.0,
     ) -> None:
         self.mode = mode
         self.universe = universe
@@ -112,6 +113,7 @@ class SystemTradingHarness:
         self.watchdog = LocalWatchdog()
         self.ai_budget = AICallBudget()
         self.prices: dict[str, float] = dict(initial_prices or {})
+        self.max_execution_quote_age_seconds = max_execution_quote_age_seconds
 
         self.initial_cash_tmn = initial_cash_tmn
         self.state: Literal["RUNNING", "PAUSED", "SAFE-STOP"] = "RUNNING"
@@ -222,52 +224,145 @@ class SystemTradingHarness:
         ranked = self.scanner.rank_candidates(candidates, top_k=3)
         self.recent_candidates = ranked
 
-        # 4. Evaluate top candidate with DecisionAgent if AI budget allows
-        if ranked and self.ai_budget.can_call(timestamp):
-            top = ranked[0]
-            context = {
-                "symbol": top["symbol"],
-                "cycle_id": cycle_id,
-                "features": top["features"],
-                "spread_bps": top.get("estimated_cost_bps", 20.0),
-                "evidence_ids": market_snapshot[top["symbol"]].get("evidence_ids", []),
-                "has_open_position": top["symbol"] in self.portfolio["open_positions"],
-            }
-            intent = self.decision_agent.decide(context)
-            self.ai_budget.record_call(timestamp)
-            self.recent_decisions.append({
-                "symbol": top["symbol"],
-                "action": intent["action"],
-                "confidence": intent.get("confidence", 0.0),
-                "rationale": intent.get("decision_rationale", ""),
-                "timestamp": timestamp,
-            })
-            self.recent_decisions = self.recent_decisions[-20:]
+        # 4. Enqueue into ReviewPriorityQueue (open positions nearing limits take precedence)
+        queue = ReviewPriorityQueue()
 
-            # 5. Risk Engine evaluates intent
-            curr_price = self.prices.get(top["symbol"], 1.0)
-            decision = self.risk_engine.evaluate(intent, self.portfolio, current_price=curr_price)
+        for sym, pos in self.portfolio["open_positions"].items():
+            if not pos.get("is_open", True):
+                continue
+            time_held = timestamp - pos.get("opened_at", timestamp)
+            max_holding = pos.get("max_holding_seconds", 300.0)
+            time_ratio = (time_held / max_holding) if max_holding > 0 else 0.0
 
-            if not decision["approved"]:
-                self.recent_rejections.append({
-                    "symbol": top["symbol"],
-                    "reject_code": decision.get("reject_code"),
-                    "reason": decision.get("rejection_reason"),
+            curr_price = self.prices.get(sym, pos.get("current_price", 1.0))
+            stop_price = pos.get("stop_price")
+            stop_dist_pct = (
+                ((curr_price - stop_price) / curr_price * 100.0)
+                if (stop_price and curr_price > 0)
+                else 100.0
+            )
+
+            # High priority if held >= 70% of max time or within 2% of stop loss
+            if time_ratio >= 0.7 or stop_dist_pct <= 2.0:
+                urgency = 50.0 + max(time_ratio * 40.0, max(0.0, (2.0 - stop_dist_pct) * 20.0))
+                queue.push(
+                    ReviewItem(
+                        item_type="POSITION",
+                        symbol=sym,
+                        priority=urgency,
+                        context=dict(pos),
+                    )
+                )
+
+        # Enqueue top candidates
+        for cand in ranked:
+            queue.push(
+                ReviewItem(
+                    item_type="CANDIDATE",
+                    symbol=cand["symbol"],
+                    priority=cand["score"],
+                    context=dict(cand),
+                )
+            )
+
+        # 5. Evaluate highest priority item if AI budget allows
+        if len(queue) > 0 and self.ai_budget.can_call(timestamp):
+            top_item = queue.pop()
+            if top_item is not None and top_item.item_type == "POSITION":
+                sym = top_item.symbol
+                pos = top_item.context
+                context = {
+                    "symbol": sym,
+                    "cycle_id": cycle_id,
+                    "action_hint": "POSITION_REVIEW",
+                    "features": market_snapshot.get(sym, {}).get("features", {}),
+                    "spread_bps": market_snapshot.get(sym, {}).get("spread_bps", 20.0),
+                    "evidence_ids": market_snapshot.get(sym, {}).get("evidence_ids", []),
+                    "has_open_position": True,
+                    "position": pos,
+                }
+                intent = self.decision_agent.decide(context)
+                self.ai_budget.record_call(timestamp)
+                self.recent_decisions.append({
+                    "symbol": sym,
+                    "action": intent["action"],
+                    "confidence": intent.get("confidence", 0.0),
+                    "rationale": intent.get("decision_rationale", ""),
                     "timestamp": timestamp,
                 })
-                self.recent_rejections = self.recent_rejections[-20:]
+                self.recent_decisions = self.recent_decisions[-20:]
 
-            # 6. Execute if approved
-            if decision["approved"]:
-                prec = self.universe.get_precision(top["symbol"]) or (4, 0)
-                order = self.executor.submit_order(
-                    decision=decision,
-                    price=curr_price,
-                    price_precision=prec[1],
-                    amount_precision=prec[0],
-                )
-                orders_submitted += 1
-                self._handle_fill(order)
+                if intent["action"] == "EXIT":
+                    curr_price = self.prices.get(sym, pos.get("current_price", 1.0))
+                    decision = self.risk_engine.evaluate(intent, self.portfolio, current_price=curr_price)
+                    if decision["approved"]:
+                        prec = self.universe.get_precision(sym) or (4, 0)
+                        order = self.executor.submit_order(
+                            decision=decision,
+                            price=curr_price,
+                            price_precision=prec[1],
+                            amount_precision=prec[0],
+                        )
+                        orders_submitted += 1
+                        self._handle_fill(order, exit_reason="AGENT_EXIT", decision=decision, intent=intent)
+            elif top_item is not None and top_item.item_type == "CANDIDATE":
+                top_sym = top_item.symbol
+                cand_ctx = top_item.context
+                context = {
+                    "symbol": top_sym,
+                    "cycle_id": cycle_id,
+                    "features": cand_ctx.get("features", {}),
+                    "spread_bps": cand_ctx.get("estimated_cost_bps", 20.0),
+                    "evidence_ids": market_snapshot.get(top_sym, {}).get("evidence_ids", []),
+                    "has_open_position": top_sym in self.portfolio["open_positions"],
+                }
+                intent = self.decision_agent.decide(context)
+                self.ai_budget.record_call(timestamp)
+                self.recent_decisions.append({
+                    "symbol": top_sym,
+                    "action": intent["action"],
+                    "confidence": intent.get("confidence", 0.0),
+                    "rationale": intent.get("decision_rationale", ""),
+                    "timestamp": timestamp,
+                })
+                self.recent_decisions = self.recent_decisions[-20:]
+
+                # Risk Engine evaluates intent
+                curr_price = self.prices.get(top_sym, 1.0)
+                decision = self.risk_engine.evaluate(intent, self.portfolio, current_price=curr_price)
+
+                if not decision["approved"]:
+                    self.recent_rejections.append({
+                        "symbol": top_sym,
+                        "reject_code": decision.get("reject_code"),
+                        "reason": decision.get("rejection_reason"),
+                        "timestamp": timestamp,
+                    })
+                    self.recent_rejections = self.recent_rejections[-20:]
+
+                # Execute if approved
+                if decision["approved"]:
+                    # Re-validate execution quote freshness (5s freshness requirement)
+                    quote_ts = float(market_snapshot[top_sym].get("quote_timestamp", timestamp))
+                    quote_age = timestamp - quote_ts
+                    if quote_age > self.max_execution_quote_age_seconds:
+                        self.recent_rejections.append({
+                            "symbol": top_sym,
+                            "reject_code": "STALE_DATA",
+                            "reason": f"Execution quote age {quote_age:.1f}s exceeded threshold {self.max_execution_quote_age_seconds}s",
+                            "timestamp": timestamp,
+                        })
+                        self.recent_rejections = self.recent_rejections[-20:]
+                    else:
+                        prec = self.universe.get_precision(top_sym) or (4, 0)
+                        order = self.executor.submit_order(
+                            decision=decision,
+                            price=curr_price,
+                            price_precision=prec[1],
+                            amount_precision=prec[0],
+                        )
+                        orders_submitted += 1
+                        self._handle_fill(order, decision=decision, intent=intent)
 
         # 7. Update portfolio equity
         self._update_equity()
@@ -309,7 +404,13 @@ class SystemTradingHarness:
         self._update_equity()
         return orders
 
-    def _handle_fill(self, order: OrderRecord, exit_reason: str = "NORMAL_EXIT") -> None:
+    def _handle_fill(
+        self,
+        order: OrderRecord,
+        exit_reason: str = "NORMAL_EXIT",
+        decision: RiskDecision | None = None,
+        intent: TradeIntent | None = None,
+    ) -> None:
         """Processes order fills into portfolio positions and records trades."""
         if order["status"] not in ("FILLED", "PARTIALLY_FILLED"):
             return
@@ -323,6 +424,12 @@ class SystemTradingHarness:
         if order["side"] == "BUY":
             cost = (qty * price) + fee
             self.portfolio["available_cash_tmn"] -= cost
+
+            # Dynamic stop and take-profit from decision, with conservative fallbacks
+            stop_price = (decision.get("projected_stop_price") if decision else None) or (price * 0.99)
+            take_profit_price = (decision.get("projected_take_profit_price") if decision else None) or (price * 1.02)
+            max_holding_seconds = (float(intent["max_holding_minutes"]) * 60.0) if (intent and intent.get("max_holding_minutes")) else 300.0
+
             self.portfolio["open_positions"][sym] = {
                 "position_id": f"pos-{order['client_id']}",
                 "symbol": sym,
@@ -332,10 +439,10 @@ class SystemTradingHarness:
                 "unrealized_pnl_tmn": 0.0,
                 "realized_pnl_tmn": 0.0,
                 "cumulative_fee_tmn": fee,
-                "stop_price": price * 0.99,  # Default 1%
-                "take_profit_price": price * 1.02,
+                "stop_price": stop_price,
+                "take_profit_price": take_profit_price,
                 "opened_at": order["created_at"],
-                "max_holding_seconds": 300.0,
+                "max_holding_seconds": max_holding_seconds,
                 "is_open": True,
             }
         elif order["side"] == "SELL":
@@ -378,3 +485,79 @@ class SystemTradingHarness:
             for p in self.portfolio["open_positions"].values()
         )
         self.portfolio["total_equity_tmn"] = self.portfolio["available_cash_tmn"] + pos_val
+
+
+def run_simulation_backtest(
+    cycles: int = 50,
+    initial_cash_tmn: float = 5000000.0,
+    heuristic_mode: bool = True,
+    telemetry_db_path: str = ":memory:",
+) -> dict[str, Any]:
+    """Executes a standardized multi-scenario simulated backtest."""
+    telemetry = TelemetryStore(db_path=telemetry_db_path)
+    telemetry.initialize()
+
+    raw_markets = [
+        {"symbol": "BTCTMN", "is_spot": True, "is_active": True, "amount_precision": 6, "price_precision": 0},
+        {"symbol": "ETHTMN", "is_spot": True, "is_active": True, "amount_precision": 4, "price_precision": 0},
+        {"symbol": "USDTTMN", "is_spot": True, "is_active": True, "amount_precision": 2, "price_precision": 0},
+    ]
+    universe = MarketUniverse.build(
+        markets=raw_markets,
+        local_denylist=["DUMMY/TMN"],
+        package_unavailable=[],
+    )
+
+    harness = SystemTradingHarness(
+        mode="backtest",
+        initial_cash_tmn=initial_cash_tmn,
+        universe=universe,
+        decision_agent=DecisionAgent(heuristic_mode=heuristic_mode),
+        risk_engine=RiskEngine(
+            risk_per_trade_equity_pct=0.005,
+            max_position_notional_equity_pct=0.15,
+            min_notional_tmn=100000.0,
+        ),
+        telemetry_store=telemetry,
+        initial_prices={"BTCTMN": 4500000000.0, "ETHTMN": 250000000.0, "USDTTMN": 70000.0},
+    )
+
+    base_prices = {"BTCTMN": 4500000000.0, "ETHTMN": 250000000.0, "USDTTMN": 70000.0}
+
+    for cycle in range(cycles):
+        t = 1000.0 + (cycle * 15.0)
+        drift = 1.0 + (0.002 * (1 if cycle % 3 == 0 else (-1 if cycle % 5 == 0 else 0.5)))
+        snapshot = {}
+        for sym, price in base_prices.items():
+            curr_p = price * (drift ** (cycle + 1))
+            snapshot[sym] = {
+                "current_price": curr_p,
+                "features": {
+                    "return_pct": (drift - 1.0) * 100,
+                    "relative_volume": 1.5 + (0.1 * (cycle % 4)),
+                    "volatility": 0.015,
+                    "latest_volume": 500000.0,
+                },
+                "spread_bps": 15.0,
+                "is_stale": False,
+                "evidence_ids": [f"ev-{sym}-{cycle}"],
+            }
+        harness.run_cycle(snapshot, timestamp=t)
+
+    harness.liquidate_all_positions(reason="END_OF_BACKTEST")
+    summary = telemetry.get_performance_summary()
+    trades = telemetry.get_recent_trades(limit=100)
+    final_equity = harness.portfolio["total_equity_tmn"]
+    net_pnl = final_equity - initial_cash_tmn
+    roi_pct = (net_pnl / initial_cash_tmn) * 100
+
+    return {
+        "harness": harness,
+        "telemetry": telemetry,
+        "initial_capital_tmn": initial_cash_tmn,
+        "final_equity_tmn": final_equity,
+        "net_pnl_tmn": net_pnl,
+        "roi_pct": roi_pct,
+        "summary": summary,
+        "trades": trades,
+    }

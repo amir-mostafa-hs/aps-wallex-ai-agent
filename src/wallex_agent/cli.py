@@ -13,7 +13,7 @@ from wallex_agent.universe import MarketUniverse
 from wallex_agent.decision_agent import DecisionAgent
 from wallex_agent.risk_engine import RiskEngine
 from wallex_agent.telemetry import TelemetryStore
-from wallex_agent.harness import SystemTradingHarness
+from wallex_agent.harness import SystemTradingHarness, run_simulation_backtest
 from wallex_agent.preflight import PreflightGate, PreflightReport
 from wallex_agent.dashboard import create_dashboard_app
 
@@ -65,67 +65,12 @@ def run_backtest_cmd(args: argparse.Namespace) -> int:
     print(f" RUNNING BACKTEST SIMULATION ({cycles_to_run} CYCLES)")
     print("=" * 60)
 
-    telemetry = TelemetryStore(db_path=":memory:")
-    telemetry.initialize()
-
-    raw_markets = [
-        {"symbol": "BTCTMN", "is_spot": True, "is_active": True, "amount_precision": 6, "price_precision": 0},
-        {"symbol": "ETHTMN", "is_spot": True, "is_active": True, "amount_precision": 4, "price_precision": 0},
-        {"symbol": "USDTTMN", "is_spot": True, "is_active": True, "amount_precision": 2, "price_precision": 0},
-    ]
-    universe = MarketUniverse.build(
-        markets=raw_markets,
-        local_denylist=["DUMMY/TMN"],
-        package_unavailable=[],
-    )
-
-    harness = SystemTradingHarness(
-        mode="backtest",
-        initial_cash_tmn=5000000.0,
-        universe=universe,
-        decision_agent=DecisionAgent(),
-        risk_engine=RiskEngine(
-            risk_per_trade_equity_pct=0.005,
-            max_position_notional_equity_pct=0.15,
-            min_notional_tmn=100000.0,
-        ),
-        telemetry_store=telemetry,
-        initial_prices={"BTCTMN": 4500000000.0, "ETHTMN": 250000000.0, "USDTTMN": 70000.0},
-    )
-
-    base_prices = {"BTCTMN": 4500000000.0, "ETHTMN": 250000000.0, "USDTTMN": 70000.0}
-
-    # Simulate price action over cycles
-    for cycle in range(cycles_to_run):
-        t = 1000.0 + (cycle * 15.0)
-        # Add slight oscillation
-        drift = 1.0 + (0.002 * (1 if cycle % 3 == 0 else (-1 if cycle % 5 == 0 else 0.5)))
-        snapshot = {}
-        for sym, price in base_prices.items():
-            curr_p = price * (drift ** (cycle + 1))
-            snapshot[sym] = {
-                "current_price": curr_p,
-                "features": {
-                    "return_pct": (drift - 1.0) * 100,
-                    "relative_volume": 1.5 + (0.1 * (cycle % 4)),
-                    "volatility": 0.015,
-                    "latest_volume": 500000.0,
-                },
-                "spread_bps": 15.0,
-                "is_stale": False,
-                "evidence_ids": [f"ev-{sym}-{cycle}"],
-            }
-        harness.run_cycle(snapshot, timestamp=t)
-
-    # Liquidate remaining positions before end of simulation
-    harness.liquidate_all_positions(reason="END_OF_BACKTEST")
-
-    # Metrics
-    summary = telemetry.get_performance_summary()
-    init_cash = 5000000.0
-    final_equity = harness.portfolio["total_equity_tmn"]
-    net_pnl = final_equity - init_cash
-    roi_pct = (net_pnl / init_cash) * 100
+    result = run_simulation_backtest(cycles=cycles_to_run)
+    summary = result["summary"]
+    init_cash = result["initial_capital_tmn"]
+    final_equity = result["final_equity_tmn"]
+    net_pnl = result["net_pnl_tmn"]
+    roi_pct = result["roi_pct"]
 
     print("\n" + "=" * 60)
     print(" BACKTEST PERFORMANCE REPORT")
@@ -189,7 +134,7 @@ def run_shadow_cmd(args: argparse.Namespace) -> int:
         mode="shadow",
         initial_cash_tmn=5000000.0,
         universe=universe,
-        decision_agent=DecisionAgent(),
+        decision_agent=DecisionAgent(heuristic_mode=True),
         risk_engine=RiskEngine(
             risk_per_trade_equity_pct=config["risk_per_trade_equity_pct"],
             max_position_notional_equity_pct=config["max_position_notional_equity_pct"],

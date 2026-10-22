@@ -5,7 +5,7 @@ from typing import Any, Mapping
 from fastapi import FastAPI, Depends, HTTPException, Header, Query, Request, Body
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from wallex_agent.harness import SystemTradingHarness
+from wallex_agent.harness import SystemTradingHarness, run_simulation_backtest
 from wallex_agent.preflight import PreflightGate
 from wallex_agent.config import load_config
 from wallex_agent.universe import MarketUniverse
@@ -454,67 +454,13 @@ def create_dashboard_app(harness: SystemTradingHarness, auth_token: str = "secre
     def run_backtest_endpoint(payload: dict[str, Any] = Body(default={"cycles": 50}), _auth: bool = Depends(verify_auth)):
         """Executes a backtest simulation and returns performance statistics."""
         cycles = int(payload.get("cycles", 50))
-        telemetry = TelemetryStore(db_path=":memory:")
-        telemetry.initialize()
-
-        raw_markets = [
-            {"symbol": "BTCTMN", "is_spot": True, "is_active": True, "amount_precision": 6, "price_precision": 0},
-            {"symbol": "ETHTMN", "is_spot": True, "is_active": True, "amount_precision": 4, "price_precision": 0},
-            {"symbol": "USDTTMN", "is_spot": True, "is_active": True, "amount_precision": 2, "price_precision": 0},
-        ]
-        universe = MarketUniverse.build(
-            markets=raw_markets,
-            local_denylist=["DUMMY/TMN"],
-            package_unavailable=[],
-        )
-
-        bt_harness = SystemTradingHarness(
-            mode="backtest",
-            initial_cash_tmn=5000000.0,
-            universe=universe,
-            decision_agent=DecisionAgent(),
-            risk_engine=RiskEngine(
-                risk_per_trade_equity_pct=0.005,
-                max_position_notional_equity_pct=0.15,
-                min_notional_tmn=100000.0,
-            ),
-            telemetry_store=telemetry,
-            initial_prices={"BTCTMN": 4500000000.0, "ETHTMN": 250000000.0, "USDTTMN": 70000.0},
-        )
-
-        base_prices = {"BTCTMN": 4500000000.0, "ETHTMN": 250000000.0, "USDTTMN": 70000.0}
-
-        for cycle in range(cycles):
-            t = 1000.0 + (cycle * 15.0)
-            drift = 1.0 + (0.002 * (1 if cycle % 3 == 0 else (-1 if cycle % 5 == 0 else 0.5)))
-            snapshot = {}
-            for sym, price in base_prices.items():
-                curr_p = price * (drift ** (cycle + 1))
-                snapshot[sym] = {
-                    "current_price": curr_p,
-                    "features": {
-                        "return_pct": (drift - 1.0) * 100,
-                        "relative_volume": 1.5 + (0.1 * (cycle % 4)),
-                        "volatility": 0.015,
-                        "latest_volume": 500000.0,
-                    },
-                    "spread_bps": 15.0,
-                    "is_stale": False,
-                    "evidence_ids": [f"ev-{sym}-{cycle}"],
-                }
-            bt_harness.run_cycle(snapshot, timestamp=t)
-
-        bt_harness.liquidate_all_positions(reason="END_OF_BACKTEST")
-        summary = telemetry.get_performance_summary()
-        trades = telemetry.get_recent_trades(limit=100)
-
-        final_equity = bt_harness.portfolio["total_equity_tmn"]
+        result = run_simulation_backtest(cycles=cycles)
         return {
-            "initial_capital_tmn": 5000000.0,
-            "final_equity_tmn": final_equity,
-            "net_pnl_tmn": final_equity - 5000000.0,
-            "summary": summary,
-            "trades": trades,
+            "initial_capital_tmn": result["initial_capital_tmn"],
+            "final_equity_tmn": result["final_equity_tmn"],
+            "net_pnl_tmn": result["net_pnl_tmn"],
+            "summary": result["summary"],
+            "trades": result["trades"],
         }
 
     @app.get("/api/reports/audit")

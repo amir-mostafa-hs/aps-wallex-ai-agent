@@ -114,6 +114,18 @@ def test_preflight_fails_closed_when_denylist_missing_or_empty(valid_env: dict[s
     assert "fail-closed" in allowlist_check["details"].lower() or "missing" in allowlist_check["details"].lower()
 
 
+def test_preflight_fails_closed_when_assets_source_missing(valid_env: dict[str, str], mock_client: MagicMock):
+    config = load_config(valid_env)
+    gate = PreflightGate(config, client=mock_client)
+    report = gate.run_all_checks(assets_source_path="non_existent_assets.md")
+
+    assert report["all_passed"] is False
+    allowlist_check = next(c for c in report["checks"] if c["name"] == "allowlist_integrity")
+    assert allowlist_check["passed"] is False
+    assert "assets.md" in allowlist_check["details"].lower()
+
+
+
 def test_preflight_fails_when_credit_package_expired_or_buffer_breached(valid_env: dict[str, str], mock_client: MagicMock):
     # Expire in 1 hour (less than pre_expiry_exit_hours=2.0)
     near_time = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()

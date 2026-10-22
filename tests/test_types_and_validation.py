@@ -148,3 +148,50 @@ def test_valid_no_trade_intent():
     validated = validate_trade_intent(intent, allowed_evidence_ids={"snap-1"})
     assert validated["action"] == "NO_TRADE"
     assert validated["strategy_id"] is None
+
+
+def test_parameter_overrides_with_unknown_key_rejected():
+    intent = {
+        "contract_version": "1.0",
+        "decision_id": "dec-006",
+        "cycle_id": "cyc-001",
+        "symbol": "BTCTMN",
+        "action": "BUY",
+        "strategy_id": "momentum",
+        "horizon_profile": "FAST",
+        "confidence": 0.8,
+        "reason_code": "SIGNAL_VALID",
+        "decision_rationale": "Valid breakout",
+        "invalidation_condition": "Invalidate",
+        "stop_distance_pct": 1.0,
+        "take_profit_distance_pct": 2.0,
+        "max_holding_minutes": 5,
+        "parameter_overrides": {"unknown_leverage": 10},
+        "evidence_ids": ["snap-1"],
+    }
+    with pytest.raises(ValidationError, match="parameter_overrides"):
+        validate_trade_intent(intent, allowed_evidence_ids={"snap-1"})
+
+
+def test_parameter_overrides_with_invalid_negative_value_rejected():
+    intent = {
+        "contract_version": "1.0",
+        "decision_id": "dec-007",
+        "cycle_id": "cyc-001",
+        "symbol": "BTCTMN",
+        "action": "BUY",
+        "strategy_id": "momentum",
+        "horizon_profile": "FAST",
+        "confidence": 0.8,
+        "reason_code": "SIGNAL_VALID",
+        "decision_rationale": "Valid breakout",
+        "invalidation_condition": "Invalidate",
+        "stop_distance_pct": 1.0,
+        "take_profit_distance_pct": 2.0,
+        "max_holding_minutes": 5,
+        "parameter_overrides": {"stop_distance_pct": -2.0},
+        "evidence_ids": ["snap-1"],
+    }
+    with pytest.raises(ValidationError, match="parameter_overrides"):
+        validate_trade_intent(intent, allowed_evidence_ids={"snap-1"})
+
