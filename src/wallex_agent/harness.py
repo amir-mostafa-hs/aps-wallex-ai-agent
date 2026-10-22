@@ -106,10 +106,20 @@ class SystemTradingHarness:
         self.decision_agent = decision_agent
         self.risk_engine = risk_engine
         self.telemetry = telemetry_store
+        if self.telemetry:
+            self.telemetry.initialize()
         self.scanner = CandidateScanner()
         self.watchdog = LocalWatchdog()
         self.ai_budget = AICallBudget()
         self.prices: dict[str, float] = dict(initial_prices or {})
+
+        self.initial_cash_tmn = initial_cash_tmn
+        self.state: Literal["RUNNING", "PAUSED", "SAFE-STOP"] = "RUNNING"
+        self.started_at: float = time.time()
+        self.cumulative_fees_tmn: float = 0.0
+        self.recent_candidates: list[Candidate] = []
+        self.recent_decisions: list[dict[str, Any]] = []
+        self.recent_rejections: list[dict[str, Any]] = []
 
         if exchange_client is None:
             self.exchange_client = SimulatedExchangeAdapter(initial_prices=self.prices)
@@ -123,6 +133,20 @@ class SystemTradingHarness:
             "open_positions": {},
             "open_orders": {},
         }
+
+    def pause(self) -> None:
+        """Pauses new entries while maintaining active position management."""
+        self.state = "PAUSED"
+
+    def resume(self) -> None:
+        """Resumes automated entries."""
+        self.state = "RUNNING"
+
+    def flatten(self, reason: str = "MANUAL_FLATTEN") -> list[OrderRecord]:
+        """Immediately closes all open positions and enters SAFE-STOP state."""
+        orders = self.liquidate_all_positions(reason=reason)
+        self.state = "SAFE-STOP"
+        return orders
 
     def run_cycle(
         self,
@@ -170,6 +194,18 @@ class SystemTradingHarness:
             orders_submitted += 1
             self._handle_fill(order, exit_reason=trigger["trigger_type"])
 
+        # If state is PAUSED or SAFE-STOP, do not scan new candidates or open new positions
+        if self.state in ("PAUSED", "SAFE-STOP"):
+            self._update_equity()
+            return {
+                "cycle_id": cycle_id,
+                "orders_submitted": orders_submitted,
+                "total_equity": self.portfolio["total_equity_tmn"],
+                "available_cash": self.portfolio["available_cash_tmn"],
+                "open_positions_count": len(self.portfolio["open_positions"]),
+                "state": self.state,
+            }
+
         # 3. Scan candidates from market snapshot
         candidates: list[Candidate] = []
         for sym, data in market_snapshot.items():
@@ -184,6 +220,7 @@ class SystemTradingHarness:
             candidates.append(cand)
 
         ranked = self.scanner.rank_candidates(candidates, top_k=3)
+        self.recent_candidates = ranked
 
         # 4. Evaluate top candidate with DecisionAgent if AI budget allows
         if ranked and self.ai_budget.can_call(timestamp):
@@ -198,10 +235,27 @@ class SystemTradingHarness:
             }
             intent = self.decision_agent.decide(context)
             self.ai_budget.record_call(timestamp)
+            self.recent_decisions.append({
+                "symbol": top["symbol"],
+                "action": intent["action"],
+                "confidence": intent.get("confidence", 0.0),
+                "rationale": intent.get("decision_rationale", ""),
+                "timestamp": timestamp,
+            })
+            self.recent_decisions = self.recent_decisions[-20:]
 
             # 5. Risk Engine evaluates intent
             curr_price = self.prices.get(top["symbol"], 1.0)
             decision = self.risk_engine.evaluate(intent, self.portfolio, current_price=curr_price)
+
+            if not decision["approved"]:
+                self.recent_rejections.append({
+                    "symbol": top["symbol"],
+                    "reject_code": decision.get("reject_code"),
+                    "reason": decision.get("rejection_reason"),
+                    "timestamp": timestamp,
+                })
+                self.recent_rejections = self.recent_rejections[-20:]
 
             # 6. Execute if approved
             if decision["approved"]:
@@ -264,6 +318,7 @@ class SystemTradingHarness:
         qty = float(order["executed_qty"]) if float(order["executed_qty"]) > 0 else float(order["quantity"])
         price = float(order["price"]) if order["price"] else 1.0
         fee = float(order["cumulative_fee"])
+        self.cumulative_fees_tmn += fee
 
         if order["side"] == "BUY":
             cost = (qty * price) + fee
