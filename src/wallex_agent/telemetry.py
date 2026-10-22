@@ -178,6 +178,49 @@ class TelemetryStore:
                 ),
             )
 
+    def log_equity_snapshot(
+        self,
+        timestamp: float,
+        total_equity: float,
+        cash: float,
+        open_positions_val: float,
+        mtm_pnl: float,
+    ) -> None:
+        """Stores a time-series equity snapshot for equity curve graphing."""
+        conn = self.get_connection()
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO equity_snapshots (timestamp, total_equity, cash, open_positions_val, mtm_pnl)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (timestamp, total_equity, cash, open_positions_val, mtm_pnl),
+            )
+
+    def get_equity_curve(self, limit: int = 500) -> list[dict[str, Any]]:
+        """Retrieves chronological equity curve data points."""
+        conn = self.get_connection()
+        cursor = conn.execute(
+            """
+            SELECT timestamp, total_equity, cash, open_positions_val, mtm_pnl
+            FROM equity_snapshots
+            ORDER BY timestamp ASC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        rows = cursor.fetchall()
+        return [
+            {
+                "timestamp": float(r["timestamp"]),
+                "total_equity": float(r["total_equity"]),
+                "cash": float(r["cash"]),
+                "open_positions_val": float(r["open_positions_val"]),
+                "mtm_pnl": float(r["mtm_pnl"]),
+            }
+            for r in rows
+        ]
+
     def get_recent_trades(self, limit: int = 50) -> list[TradeRecord]:
         conn = self.get_connection()
         cursor = conn.execute(
@@ -221,12 +264,17 @@ class TelemetryStore:
                 "win_rate_pct": 0.0,
                 "net_realized_pnl_tmn": 0.0,
                 "total_fees_tmn": 0.0,
+                "total_loss_tmn": 0.0,
+                "fee_loss_ratio_pct": 0.0,
                 "max_drawdown_pct": 0.0,
             }
         winning = [t for t in trades if t["net_realized_pnl_tmn"] > 0]
         losing = [t for t in trades if t["net_realized_pnl_tmn"] < 0]
         net_pnl = sum(t["net_realized_pnl_tmn"] for t in trades)
         fees = sum(t["total_fee_tmn"] for t in trades)
+        total_loss = sum(abs(t["net_realized_pnl_tmn"]) for t in losing)
+        fees_on_losing = sum(t["total_fee_tmn"] for t in losing)
+        fee_loss_ratio = (fees_on_losing / total_loss * 100.0) if total_loss > 0 else 0.0
         win_rate = (len(winning) / total_trades) * 100.0
 
         cumulative = 0.0
@@ -247,5 +295,8 @@ class TelemetryStore:
             "win_rate_pct": win_rate,
             "net_realized_pnl_tmn": net_pnl,
             "total_fees_tmn": fees,
+            "total_loss_tmn": total_loss,
+            "fee_loss_ratio_pct": fee_loss_ratio,
             "max_drawdown_pct": (max_dd / 5000000.0) * 100.0 if max_dd > 0 else 0.0,
         }
+

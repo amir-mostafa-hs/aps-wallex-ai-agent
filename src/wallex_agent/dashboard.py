@@ -89,6 +89,26 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
         .pill-warn { background: #854d0e; color: #fde047; }
         .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; vertical-align: middle; margin-left: 6px; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        .chart-box {
+            background: #0f172a; border: 1px solid var(--card-border); border-radius: 8px;
+            padding: 16px; margin-top: 15px; position: relative;
+        }
+        .modal-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75);
+            z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(4px);
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-card {
+            background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px;
+            width: 90%; max-width: 650px; padding: 24px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            position: relative; max-height: 85vh; overflow-y: auto; text-align: right;
+        }
+        .modal-close {
+            position: absolute; top: 16px; left: 16px; background: transparent; border: none;
+            color: #94a3b8; font-size: 1.4rem; cursor: pointer;
+        }
+        .modal-close:hover { color: #fff; }
+
     </style>
 </head>
 <body>
@@ -187,6 +207,11 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                 <div class="metric-box"><div class="metric-label">حداکثر افت سرمایه (Max DD)</div><div id="btMaxDd" class="metric-val">0%</div></div>
             </div>
 
+            <div class="chart-box">
+                <h3 style="margin:0 0 10px 0; color:var(--primary);">منحنی رشد دارایی در شبیه‌سازی (Simulation Equity Curve)</h3>
+                <div id="btEquityChart"></div>
+            </div>
+
             <h3 style="margin-top: 20px; color: var(--primary);">ریز معاملات انجام‌شده در شبیه‌سازی</h3>
             <div id="btTradesTableContainer"></div>
         </div>
@@ -200,6 +225,12 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                 <button class="action-btn btn-primary" onclick="loadAuditReport()">بارگذاری مجدد گزارش</button>
             </div>
             <div id="auditSummaryContainer" class="grid" style="margin-top: 15px;"></div>
+            
+            <div class="chart-box">
+                <h3 style="margin:0 0 10px 0; color:var(--primary);">منحنی رشد دارایی معاملات گذشته (Historical Equity Curve)</h3>
+                <div id="auditEquityChart"></div>
+            </div>
+
             <h3 style="margin-top: 24px; color: var(--primary);">تحلیل علت زیان معاملات (Loss Cause Post-Mortem)</h3>
             <div id="auditTradesContainer" style="overflow-x: auto;"></div>
         </div>
@@ -214,6 +245,16 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
             <div id="preflightResultContainer" style="margin-top: 20px;"></div>
         </div>
     </div>
+
+    <!-- Post-Mortem Modal -->
+    <div id="postMortemModal" class="modal-overlay" onclick="closePostMortemModal(event)">
+        <div class="modal-card" onclick="event.stopPropagation()">
+            <button class="modal-close" onclick="closePostMortemModal()">&times;</button>
+            <h2 id="pmTitle" style="color:var(--primary); margin-top:0;">کارت تفصیلی تحلیل پس از معامله (Post-Mortem)</h2>
+            <div id="pmContent"></div>
+        </div>
+    </div>
+
 
     <script>
         function getToken() {
@@ -312,6 +353,10 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                 document.getElementById('btTradesCount').innerText = data.summary.total_trades;
                 document.getElementById('btMaxDd').innerText = data.summary.max_drawdown_pct.toFixed(2) + '%';
 
+                if (data.equity_curve && data.equity_curve.length > 0) {
+                    renderEquityChart('btEquityChart', data.equity_curve, data.initial_capital_tmn);
+                }
+
                 const trades = data.trades || [];
                 if (trades.length > 0) {
                     let rows = trades.map(t => `<tr><td>${t.symbol}</td><td><span class="badge badge-running">${t.strategy_id || 'momentum'}</span></td><td>${t.quantity}</td><td>${Number(t.entry_price).toLocaleString()}</td><td>${Number(t.exit_price).toLocaleString()}</td><td style="color:${t.gross_realized_pnl_tmn>=0?'#34d399':'#f87171'}">${Number(t.gross_realized_pnl_tmn).toLocaleString()}</td><td>${Number(t.total_fee_tmn).toLocaleString()}</td><td style="font-weight:bold;color:${t.net_realized_pnl_tmn>=0?'#34d399':'#f87171'}">${Number(t.net_realized_pnl_tmn).toLocaleString()}</td><td>${t.exit_reason}</td></tr>`).join('');
@@ -327,6 +372,8 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
             }
         }
 
+        let currentAuditTrades = [];
+
         async function loadAuditReport() {
             const token = getToken();
             try {
@@ -336,25 +383,139 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                 if (!res.ok) return;
                 const data = await res.json();
                 const s = data.summary;
+                const feeLossPct = s.fee_loss_ratio_pct ? s.fee_loss_ratio_pct.toFixed(1) : '0.0';
+                const totalLoss = s.total_loss_tmn ? Number(s.total_loss_tmn).toLocaleString() : '0';
+
                 document.getElementById('auditSummaryContainer').innerHTML = `
                     <div class="metric-box"><div class="metric-label">کل معاملات گذشته</div><div class="metric-val">${s.total_trades}</div></div>
                     <div class="metric-box"><div class="metric-label">معاملات برنده / بازنده</div><div class="metric-val">${s.winning_trades} / ${s.losing_trades}</div></div>
                     <div class="metric-box"><div class="metric-label">سود خالص محقق‌شده</div><div class="metric-val" style="color:${s.net_realized_pnl_tmn>=0?'#34d399':'#f87171'}">${Number(s.net_realized_pnl_tmn).toLocaleString()} TMN</div></div>
                     <div class="metric-box"><div class="metric-label">مجموع کارمزدهای پرداختی</div><div class="metric-val">${Number(s.total_fees_tmn).toLocaleString()} TMN</div></div>
+                    <div class="metric-box">
+                        <div class="metric-label">سهم کارمزد از کل زیان‌ها (Fee Impact)</div>
+                        <div class="metric-val" style="color:${s.fee_loss_ratio_pct > 25 ? '#f87171' : '#fbbf24'}">${feeLossPct}%</div>
+                        <div style="font-size:0.75rem; color:#94a3b8; margin-top:4px;">کل زیان ناخالص: ${totalLoss} TMN</div>
+                    </div>
                 `;
 
-                const trades = data.trades || [];
-                if (trades.length > 0) {
-                    let rows = trades.map(t => {
-                        let lossBadge = t.loss_cause === 'confirmed' ? '<span class="status-pill pill-fail">تأییدشده (تیک مارکت)</span>' : (t.loss_cause === 'likely' ? '<span class="status-pill pill-warn">محتمل</span>' : (t.loss_cause === 'unknown' ? '<span class="status-pill pill-warn">دریفت عادی</span>' : '<span class="status-pill pill-pass">برنده</span>'));
-                        return `<tr><td>${t.symbol}</td><td style="color:${t.net_realized_pnl_tmn>=0?'#34d399':'#f87171'}">${Number(t.net_realized_pnl_tmn).toLocaleString()} TMN</td><td>${Number(t.total_fee_tmn).toLocaleString()} TMN</td><td>${t.exit_reason}</td><td>${lossBadge}</td></tr>`;
+                if (data.equity_curve && data.equity_curve.length > 0) {
+                    renderEquityChart('auditEquityChart', data.equity_curve, 5000000.0);
+                } else {
+                    document.getElementById('auditEquityChart').innerHTML = '<p style="color:var(--text-muted); text-align:center; padding:20px;">نقطه ثبت‌شده‌ای در این بازه برای رسم منحنی دارایی وجود ندارد.</p>';
+                }
+
+                currentAuditTrades = data.trades || [];
+                if (currentAuditTrades.length > 0) {
+                    let rows = currentAuditTrades.map((t, idx) => {
+                        let lossBadge = t.loss_cause === 'confirmed' ? '<span class="status-pill pill-fail">تأییدشده (تیک مارکت)</span>' : (t.loss_cause === 'likely' ? '<span class="status-pill pill-warn">محتمل (اسلیپیج)</span>' : (t.loss_cause === 'unknown' ? '<span class="status-pill pill-warn">دریفت عادی</span>' : '<span class="status-pill pill-pass">برنده</span>'));
+                        return `<tr><td>${t.symbol}</td><td style="color:${t.net_realized_pnl_tmn>=0?'#34d399':'#f87171'}">${Number(t.net_realized_pnl_tmn).toLocaleString()} TMN</td><td>${Number(t.total_fee_tmn).toLocaleString()} TMN</td><td>${t.exit_reason}</td><td>${lossBadge}</td><td><button class="action-btn" style="padding:4px 10px; font-size:0.8rem; background:#334155; color:#fff;" onclick="openPostMortem(${idx})">مشاهده Post-Mortem</button></td></tr>`;
                     }).join('');
-                    document.getElementById('auditTradesContainer').innerHTML = `<table><thead><tr><th>نماد</th><th>سود/زیان خالص</th><th>کارمزد</th><th>دلیل خروج</th><th>ریشه‌یابی علت زیان</th></tr></thead><tbody>${rows}</tbody></table>`;
+                    document.getElementById('auditTradesContainer').innerHTML = `<table><thead><tr><th>نماد</th><th>سود/زیان خالص</th><th>کارمزد</th><th>دلیل خروج</th><th>ریشه‌یابی علت زیان</th><th>اقدام / تحلیل تفصیلی</th></tr></thead><tbody>${rows}</tbody></table>`;
                 } else {
                     document.getElementById('auditTradesContainer').innerHTML = '<p style="color: var(--text-muted); padding: 10px 0;">تراکنشی در پایگاه داده ثبت نشده است.</p>';
                 }
             } catch(e) {}
         }
+
+        function renderEquityChart(containerId, points, initialCapital) {
+            const el = document.getElementById(containerId);
+            if (!el) return;
+            if (!points || points.length === 0) {
+                el.innerHTML = '<p style="color:var(--text-muted); padding:20px 0; text-align:center;">داده‌ای برای رسم نمودار در دسترس نیست.</p>';
+                return;
+            }
+
+            const w = 760;
+            const h = 200;
+            const padX = 50;
+            const padY = 30;
+
+            let equities = points.map(p => Number(p.total_equity));
+            let minEq = Math.min(...equities, initialCapital);
+            let maxEq = Math.max(...equities, initialCapital);
+            let range = (maxEq - minEq) || 1.0;
+            minEq -= range * 0.05;
+            maxEq += range * 0.05;
+            range = maxEq - minEq;
+
+            const getX = (i) => padX + (i / Math.max(1, points.length - 1)) * (w - 2 * padX);
+            const getY = (val) => (h - padY) - ((val - minEq) / range) * (h - 2 * padY);
+
+            const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${getX(i).toFixed(1)} ${getY(p.total_equity).toFixed(1)}`).join(' ');
+            const baseLineY = getY(initialCapital);
+            const lastEq = equities[equities.length - 1];
+            const isProfitable = lastEq >= initialCapital;
+            const strokeColor = isProfitable ? '#10b981' : '#ef4444';
+            const fillGradientId = 'grad-' + containerId;
+
+            let svg = `<svg viewBox="0 0 ${w} ${h}" style="width:100%; height:auto; overflow:visible;">
+                <defs>
+                    <linearGradient id="${fillGradientId}" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="${strokeColor}" stop-opacity="0.3"/>
+                        <stop offset="100%" stop-color="${strokeColor}" stop-opacity="0.0"/>
+                    </linearGradient>
+                </defs>
+                <line x1="${padX}" y1="${getY(maxEq)}" x2="${w - padX}" y2="${getY(maxEq)}" stroke="#334155" stroke-dasharray="3,3"/>
+                <line x1="${padX}" y1="${getY(minEq)}" x2="${w - padX}" y2="${getY(minEq)}" stroke="#334155" stroke-dasharray="3,3"/>
+                <line x1="${padX}" y1="${baseLineY}" x2="${w - padX}" y2="${baseLineY}" stroke="#64748b" stroke-dasharray="4,4"/>
+                <text x="${w - padX}" y="${baseLineY - 6}" fill="#94a3b8" font-size="11" text-anchor="end">سرمایه مبنا: ${Number(initialCapital).toLocaleString()} TMN</text>
+                <text x="${padX}" y="${padY - 8}" fill="#94a3b8" font-size="10">${Number(maxEq.toFixed(0)).toLocaleString()}</text>
+                <text x="${padX}" y="${h - padY + 16}" fill="#94a3b8" font-size="10">${Number(minEq.toFixed(0)).toLocaleString()}</text>
+                <path d="${pathD} L ${getX(points.length - 1)} ${h - padY} L ${padX} ${h - padY} Z" fill="url(#${fillGradientId})"/>
+                <path d="${pathD}" fill="none" stroke="${strokeColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="${getX(0)}" cy="${getY(equities[0])}" r="4" fill="#38bdf8"/>
+                <circle cx="${getX(points.length - 1)}" cy="${getY(lastEq)}" r="5" fill="${strokeColor}"/>
+            </svg>`;
+
+            el.innerHTML = svg;
+        }
+
+        function openPostMortem(idx) {
+            const t = currentAuditTrades[idx];
+            if (!t) return;
+            const isLoss = t.net_realized_pnl_tmn < 0;
+            const statusText = isLoss ? 'زیان‌ده (Loss)' : 'سودآور (Profit)';
+            const statusColor = isLoss ? '#f87171' : '#34d399';
+            let notes = t.post_mortem_notes || 'اطلاعات بیشتری در تله‌متری ثبت نشده است.';
+
+            document.getElementById('pmTitle').innerText = `تحلیل پس از معامله (Post-Mortem): ${t.symbol} (${t.trade_id})`;
+            document.getElementById('pmContent').innerHTML = `
+                <div style="background:#0f172a; padding:16px; border-radius:8px; border:1px solid var(--card-border); margin-bottom:14px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                        <span>نماد معاملاتی: <strong>${t.symbol}</strong></span>
+                        <span>استراتژی: <strong style="color:var(--primary);">${t.strategy_id || 'momentum'}</strong></span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                        <span>وضعیت نهایی معامله: <strong style="color:${statusColor};">${statusText}</strong></span>
+                        <span>علت زیان صرافی: <strong>${t.loss_cause || 'سودآور / نرمال'}</strong></span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                        <span>قیمت ورود: ${Number(t.entry_price).toLocaleString()} TMN</span>
+                        <span>قیمت خروج: ${Number(t.exit_price).toLocaleString()} TMN</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                        <span>سود ناخالص (Gross PnL): ${Number(t.gross_realized_pnl_tmn).toLocaleString()} TMN</span>
+                        <span>کل کارمزد پرداخت‌شده: <strong style="color:#fbbf24;">${Number(t.total_fee_tmn).toLocaleString()} TMN</strong></span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; border-top:1px solid var(--card-border); padding-top:8px;">
+                        <span>سود/زیان خالص محقق‌شده:</span>
+                        <span style="font-weight:bold; font-size:1.15rem; color:${statusColor};">${Number(t.net_realized_pnl_tmn).toLocaleString()} TMN</span>
+                    </div>
+                </div>
+                <div style="background:#0f172a; padding:16px; border-radius:8px; border:1px solid var(--card-border);">
+                    <h4 style="margin:0 0 8px 0; color:var(--primary);">علت توقف، شواهد و منطق ارزیابی هوش مصنوعی (AI Rationale & Evidence):</h4>
+                    <p style="margin:0; font-size:0.9rem; line-height:1.6; color:#cbd5e1; direction:ltr; text-align:left; background:#1e293b; padding:10px; border-radius:6px; font-family:monospace; word-break:break-all;">${notes}</p>
+                </div>
+            `;
+            document.getElementById('postMortemModal').classList.add('active');
+        }
+
+        function closePostMortemModal(e) {
+            if (!e || e.target.id === 'postMortemModal' || e.target.classList.contains('modal-close')) {
+                document.getElementById('postMortemModal').classList.remove('active');
+            }
+        }
+
 
         async function runPreflightCheck() {
             const btn = document.getElementById('btnRunPreflight');
@@ -529,10 +690,13 @@ def create_dashboard_app(harness: SystemTradingHarness, auth_token: str = "super
         """Returns trade history and loss cause audit from telemetry store."""
         summary = harness.telemetry.get_performance_summary()
         trades = harness.telemetry.get_recent_trades(limit=50)
+        equity_curve = harness.telemetry.get_equity_curve(limit=500)
         return {
             "summary": summary,
             "trades": trades,
+            "equity_curve": equity_curve,
         }
+
 
     @app.get("/api/preflight/run")
     def run_preflight_endpoint(_auth: bool = Depends(verify_auth)):

@@ -109,3 +109,65 @@ def test_telemetry_store_persists_events_and_trades():
     assert trades[0]["trade_id"] == "tr-001"
     assert trades[0]["net_realized_pnl_tmn"] == -3500.0
     assert trades[0]["loss_cause"] == "confirmed"
+
+
+def test_telemetry_store_equity_curve_and_fee_loss_ratio():
+    store = TelemetryStore(db_path=":memory:")
+    store.initialize()
+
+    # Log equity snapshots
+    store.log_equity_snapshot(timestamp=1000.0, total_equity=5000000.0, cash=5000000.0, open_positions_val=0.0, mtm_pnl=0.0)
+    store.log_equity_snapshot(timestamp=1015.0, total_equity=4995000.0, cash=4500000.0, open_positions_val=495000.0, mtm_pnl=-5000.0)
+
+    curve = store.get_equity_curve()
+    assert len(curve) == 2
+    assert curve[0]["total_equity"] == 5000000.0
+    assert curve[1]["total_equity"] == 4995000.0
+
+    # Log winning trade
+    store.log_trade({
+        "trade_id": "tr-win",
+        "symbol": "BTCTMN",
+        "strategy_id": "momentum",
+        "horizon_profile": "FAST",
+        "entry_price": 4000000.0,
+        "exit_price": 4120000.0,
+        "quantity": 0.1,
+        "gross_realized_pnl_tmn": 12000.0,
+        "net_realized_pnl_tmn": 10000.0,
+        "total_fee_tmn": 2000.0,
+        "holding_seconds": 120.0,
+        "opened_at": 1000.0,
+        "closed_at": 1120.0,
+        "exit_reason": "TAKE_PROFIT",
+        "loss_cause": None,
+        "post_mortem_notes": "Target achieved",
+    })
+
+    # Log losing trade
+    store.log_trade({
+        "trade_id": "tr-loss",
+        "symbol": "ETHTMN",
+        "strategy_id": "trend_following",
+        "horizon_profile": "FAST",
+        "entry_price": 200000.0,
+        "exit_price": 197000.0,
+        "quantity": 1.0,
+        "gross_realized_pnl_tmn": -3000.0,
+        "net_realized_pnl_tmn": -4000.0,
+        "total_fee_tmn": 1000.0,
+        "holding_seconds": 60.0,
+        "opened_at": 1130.0,
+        "closed_at": 1190.0,
+        "exit_reason": "STOP_LOSS",
+        "loss_cause": "confirmed",
+        "post_mortem_notes": "Adverse momentum breach",
+    })
+
+    summary = store.get_performance_summary()
+    assert summary["total_trades"] == 2
+    assert summary["winning_trades"] == 1
+    assert summary["losing_trades"] == 1
+    assert summary["total_loss_tmn"] == 4000.0
+    assert summary["fee_loss_ratio_pct"] == pytest.approx(25.0)
+

@@ -159,6 +159,9 @@ class PositionRecord(TypedDict):
     opened_at: float
     max_holding_seconds: float
     is_open: bool
+    entry_rationale: NotRequired[str | None]
+    evidence_ids: NotRequired[Sequence[str]]
+
 
 
 

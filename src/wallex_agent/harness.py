@@ -16,7 +16,7 @@ from wallex_agent.decision_agent import DecisionAgent
 from wallex_agent.risk_engine import RiskEngine, PortfolioState
 from wallex_agent.executor import OrderExecutor
 from wallex_agent.watchdog import LocalWatchdog
-from wallex_agent.telemetry import TelemetryStore, calculate_trade_pnl
+from wallex_agent.telemetry import TelemetryStore, calculate_trade_pnl, classify_loss_cause
 
 
 class SimulatedExchangeAdapter:
@@ -365,7 +365,7 @@ class SystemTradingHarness:
                         self._handle_fill(order, decision=decision, intent=intent)
 
         # 7. Update portfolio equity
-        self._update_equity()
+        self._update_equity(timestamp=timestamp)
 
         return {
             "cycle_id": cycle_id,
@@ -430,6 +430,8 @@ class SystemTradingHarness:
             take_profit_price = (decision.get("projected_take_profit_price") if decision else None) or (price * 1.02)
             max_holding_seconds = (float(intent["max_holding_minutes"]) * 60.0) if (intent and intent.get("max_holding_minutes")) else 300.0
             strat_id = (intent.get("strategy_id") if intent else "momentum") or "momentum"
+            entry_rationale = (intent.get("decision_rationale") if intent else "") or ""
+            evidence_ids = list(intent.get("evidence_ids", [])) if intent else []
 
             self.portfolio["open_positions"][sym] = {
                 "position_id": f"pos-{order['client_id']}",
@@ -446,6 +448,8 @@ class SystemTradingHarness:
                 "opened_at": order["created_at"],
                 "max_holding_seconds": max_holding_seconds,
                 "is_open": True,
+                "entry_rationale": entry_rationale,
+                "evidence_ids": evidence_ids,
             }
         elif order["side"] == "SELL":
             proceeds = (qty * price) - fee
@@ -459,6 +463,18 @@ class SystemTradingHarness:
                     quantity=qty,
                     entry_fee=pos["cumulative_fee_tmn"],
                     exit_fee=fee,
+                )
+                loss_cause, cause_desc = classify_loss_cause(
+                    exit_reason=exit_reason,
+                    net_pnl=net_pnl,
+                    market_context={"spread_bps": 15.0, "stop_breached": "STOP" in exit_reason},
+                )
+                entry_rat = pos.get("entry_rationale", "")
+                ev_ids = pos.get("evidence_ids", [])
+                post_mortem = (
+                    f"{cause_desc} | Rationale: {entry_rat} | Evidence: {','.join(ev_ids)}"
+                    if net_pnl < 0
+                    else f"Target achieved: {exit_reason}"
                 )
                 trade: TradeRecord = {
                     "trade_id": f"tr-{order['client_id']}",
@@ -475,18 +491,28 @@ class SystemTradingHarness:
                     "opened_at": pos["opened_at"],
                     "closed_at": order["created_at"],
                     "exit_reason": exit_reason,
-                    "loss_cause": "confirmed" if net_pnl < 0 else None,
-                    "post_mortem_notes": f"Exit triggered: {exit_reason}",
+                    "loss_cause": loss_cause,
+                    "post_mortem_notes": post_mortem,
                 }
                 self.telemetry.log_trade(trade)
 
-    def _update_equity(self) -> None:
-        """Recalculates mark-to-market equity."""
+    def _update_equity(self, timestamp: float | None = None) -> None:
+        """Recalculates mark-to-market equity and logs snapshot if telemetry configured."""
         pos_val = sum(
             p["quantity"] * self.prices.get(p["symbol"], p["current_price"])
             for p in self.portfolio["open_positions"].values()
         )
         self.portfolio["total_equity_tmn"] = self.portfolio["available_cash_tmn"] + pos_val
+        if timestamp is not None and getattr(self, "telemetry", None):
+            cost_basis = sum(p["quantity"] * p["entry_price"] for p in self.portfolio["open_positions"].values())
+            self.telemetry.log_equity_snapshot(
+                timestamp=timestamp,
+                total_equity=self.portfolio["total_equity_tmn"],
+                cash=self.portfolio["available_cash_tmn"],
+                open_positions_val=pos_val,
+                mtm_pnl=pos_val - cost_basis,
+            )
+
 
 
 def run_simulation_backtest(
@@ -566,6 +592,7 @@ def run_simulation_backtest(
     roi_pct = (net_pnl / initial_cash_tmn) * 100
     gross_pnl = sum(float(t.get("gross_realized_pnl_tmn", 0.0)) for t in trades)
     total_fees = float(harness.cumulative_fees_tmn)
+    equity_curve = telemetry.get_equity_curve()
 
     return {
         "harness": harness,
@@ -582,4 +609,6 @@ def run_simulation_backtest(
         "max_holding_minutes": max_holding_minutes,
         "summary": summary,
         "trades": trades,
+        "equity_curve": equity_curve,
     }
+

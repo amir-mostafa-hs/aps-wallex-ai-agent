@@ -193,7 +193,11 @@ def test_dashboard_audit_reports_endpoint(client: TestClient):
     assert res.status_code == 200
     data = res.json()
     assert "summary" in data
+    assert "fee_loss_ratio_pct" in data["summary"]
+    assert "total_loss_tmn" in data["summary"]
     assert "trades" in data
+    assert "equity_curve" in data
+
 
 
 def test_dashboard_preflight_endpoint(client: TestClient):
