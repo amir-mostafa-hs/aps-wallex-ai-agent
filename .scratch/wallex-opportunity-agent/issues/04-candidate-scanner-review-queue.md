@@ -7,14 +7,14 @@ A fast, lightweight scanning engine that periodically (every 15 seconds) evaluat
 02: Market Universe Ingestion & Allowlist Filter, 03: Historical Candle Buffer & Feature Engine
 
 **Status:**
-ready-for-agent
+resolved
 
 ## Acceptance Criteria
 
-- [ ] Runs a periodic scan cycle (default 15s) over all eligible allowlisted markets using cached features.
-- [ ] Computes objective candidate scores based on trend strength, volume expansion, volatility, and execution spread.
-- [ ] Excludes symbols with insufficient volume, wide spreads, or unverified execution data, logging explicit exclusion reasons.
-- [ ] Selects the top candidates (default top 3) for detailed AI evaluation.
-- [ ] Maintains an AI Review Priority Queue that prioritizes open positions nearing stop/time thresholds over new entry candidates.
-- [ ] Enforces AI call budget (minimum 30 seconds interval, max 3 calls/min).
-- [ ] Unit tests verify candidate ranking accuracy, priority queue ordering, and scan cycle timing.
+- [x] Runs a periodic scan cycle (default 15s) over all eligible allowlisted markets using cached features.
+- [x] Computes objective candidate scores based on trend strength, volume expansion, volatility, and execution spread.
+- [x] Excludes symbols with insufficient volume, wide spreads, or unverified execution data, logging explicit exclusion reasons.
+- [x] Selects the top candidates (default top 3) for detailed AI evaluation.
+- [x] Maintains an AI Review Priority Queue that prioritizes open positions nearing stop/time thresholds over new entry candidates.
+- [x] Enforces AI call budget (minimum 30 seconds interval, max 3 calls/min).
+- [x] Unit tests verify candidate ranking accuracy, priority queue ordering, and scan cycle timing.
