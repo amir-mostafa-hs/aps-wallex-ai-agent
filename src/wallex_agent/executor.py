@@ -106,6 +106,9 @@ class OrderExecutor:
             result = resp.get("result", {})
             order_record["exchange_order_id"] = str(result.get("id", "")) if result.get("id") else None
             order_record["status"] = result.get("status", "SUBMITTED")
+            order_record["executed_qty"] = float(result.get("executedQty", 0.0))
+            order_record["executed_sum"] = float(result.get("executedSum", 0.0))
+            order_record["cumulative_fee"] = float(result.get("fee", 0.0))
             order_record["updated_at"] = time.time()
             self.register_open_order(order_record)
             return order_record
