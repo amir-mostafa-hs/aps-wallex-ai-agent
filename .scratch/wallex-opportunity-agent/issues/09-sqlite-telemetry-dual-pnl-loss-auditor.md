@@ -7,14 +7,14 @@ A persistent event-logging and post-trade auditing subsystem powered by SQLite i
 08: Order Executor, Client ID Tracking & Reconciliation
 
 **Status:**
-ready-for-agent
+resolved
 
 ## Acceptance Criteria
 
-- [ ] SQLite database configured with Write-Ahead Logging (WAL) and synchronous normal mode for concurrent read/write performance.
-- [ ] Schema stores immutable audit logs for scanner cycles, AI reasoning payloads, risk evaluation records, order events, and position transitions.
-- [ ] Deterministically calculates Net Realized P&L in TMN upon position exit, subtracting maker/taker exchange fees.
-- [ ] Continuously tracks and logs Mark-to-Market Equity using real-time bid/ask valuation for open positions.
-- [ ] Audits losing trades and generates post-trade analysis categorizing causes into `confirmed`, `likely`, or `unknown` based on recorded market data without LLM hallucination.
-- [ ] Never logs secrets, private API keys, or raw authentication tokens.
-- [ ] Unit tests verify event insertion, P&L accounting math against test fills, and loss categorization logic.
+- [x] SQLite database configured with Write-Ahead Logging (WAL) and synchronous normal mode for concurrent read/write performance.
+- [x] Schema stores immutable audit logs for scanner cycles, AI reasoning payloads, risk evaluation records, order events, and position transitions.
+- [x] Deterministically calculates Net Realized P&L in TMN upon position exit, subtracting maker/taker exchange fees.
+- [x] Continuously tracks and logs Mark-to-Market Equity using real-time bid/ask valuation for open positions.
+- [x] Audits losing trades and generates post-trade analysis categorizing causes into `confirmed`, `likely`, or `unknown` based on recorded market data without LLM hallucination.
+- [x] Never logs secrets, private API keys, or raw authentication tokens.
+- [x] Unit tests verify event insertion, P&L accounting math against test fills, and loss categorization logic.
