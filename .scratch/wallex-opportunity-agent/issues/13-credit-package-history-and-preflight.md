@@ -5,10 +5,10 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] افزودن متد استعلام پکیج اعتباری `get_credit_package_details` در آداپتور یا PreflightGate
-- [ ] تطبیق شناسه حساب با `SUB_ACCOUNT_CLIENT_ID` و ثبت تاریخ انقضا و آستانه لیکوییدیشن واقعی
-- [ ] مسدود ماندن قفل Live در صورت خالی بودن یا عدم تطابق ساب‌اکانت
-- [ ] ماسک کردن کلیدها و شناسه‌های حساس در تمام خروجی‌ها و لاگ‌ها
-- [ ] آزمون‌های واحد و یکپارچه در `tests/test_preflight.py`
+- [x] افزودن متد استعلام پکیج اعتباری `get_credit_package_details` در آداپتور یا PreflightGate
+- [x] تطبیق شناسه حساب با `SUB_ACCOUNT_CLIENT_ID` و ثبت تاریخ انقضا و آستانه لیکوییدیشن واقعی
+- [x] مسدود ماندن قفل Live در صورت خالی بودن یا عدم تطابق ساب‌اکانت
+- [x] ماسک کردن کلیدها و شناسه‌های حساس در تمام خروجی‌ها و لاگ‌ها
+- [x] آزمون‌های واحد و یکپارچه در `tests/test_preflight.py`

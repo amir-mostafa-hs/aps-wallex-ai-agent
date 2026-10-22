@@ -180,3 +180,33 @@ def test_preflight_blocks_live_startup_if_flags_not_satisfied(mock_client: Magic
     report = gate.run_all_checks()
     # In shadow mode, enforce_or_raise should not raise because mode is not live
     gate.enforce_or_raise(report)
+
+
+def test_preflight_verifies_package_history_and_subaccount_matching(valid_env: dict[str, str], mock_client: MagicMock):
+    config = load_config(valid_env)
+    mock_client.get_package_history.return_value = [
+        {
+            "id": 183,
+            "client_id": "sub_client_12345",
+            "status": "ACTIVE",
+            "expire_at": "2026-10-25T00:00:00Z",
+            "liquidity_limit": 900,
+            "loan": 5000000,
+        }
+    ]
+    gate = PreflightGate(config, client=mock_client)
+    pkg_details = gate.get_credit_package_details(package_id=183)
+
+    assert pkg_details is not None
+    assert pkg_details["matched"] is True
+    assert pkg_details["client_id"] == "sub_client_12345"
+    assert pkg_details["liquidity_limit"] == 900
+
+    # Case 2: Mismatched sub-account client ID
+    mismatched_env = dict(valid_env)
+    mismatched_env["SUB_ACCOUNT_CLIENT_ID"] = "sub_wrong_99999"
+    mismatched_gate = PreflightGate(load_config(mismatched_env), client=mock_client)
+    check = mismatched_gate.check_api_key_and_subaccount()
+
+    assert check["passed"] is False
+    assert "does not match" in check["details"].lower() or "not matched" in check["details"].lower()

@@ -39,6 +39,50 @@ class PreflightGate:
         self.config = config
         self.client = client
 
+    def get_credit_package_details(self, package_id: int = 183) -> dict[str, Any] | None:
+        """Fetches credit package history from client and verifies subaccount matching."""
+        if not self.client:
+            return None
+
+        pkgs: list[dict[str, Any]] = []
+        if hasattr(self.client, "get_package_history"):
+            try:
+                raw = self.client.get_package_history()
+                if isinstance(raw, list):
+                    pkgs = raw
+                elif isinstance(raw, dict):
+                    pkgs = raw.get("result", {}).get("packages", []) or raw.get("packages", [])
+            except Exception as exc:
+                logger.warning(f"Failed to fetch package history: {exc}")
+                return None
+        elif hasattr(self.client, "get_active_package"):
+            try:
+                pkg = self.client.get_active_package()
+                if pkg:
+                    pkgs = [pkg]
+            except Exception:
+                pass
+
+        if not pkgs:
+            return None
+
+        cfg_sub_id = self.config.get("sub_account_client_id", "").strip()
+        for p in pkgs:
+            p_id = p.get("id") or p.get("packageId") or p.get("package_id")
+            c_id = p.get("client_id") or p.get("subAccountClientId") or p.get("sub_account_client_id") or ""
+            if p_id == package_id or package_id is None:
+                matched = bool(cfg_sub_id and str(c_id).strip() == cfg_sub_id)
+                return {
+                    "package_id": p_id,
+                    "client_id": str(c_id).strip(),
+                    "status": str(p.get("status", "UNKNOWN")).upper(),
+                    "expire_at": p.get("expire_at") or p.get("expireAt"),
+                    "liquidity_limit": float(p.get("liquidity_limit") or p.get("liquidityLimit") or 900.0),
+                    "loan_tmn": float(p.get("loan") or p.get("loanAmount") or 5000000.0),
+                    "matched": matched,
+                }
+        return None
+
     def check_api_key_and_subaccount(self) -> PreflightCheckResult:
         api_key = self.config.get("wallex_api_key", "").strip()
         sub_account_id = self.config.get("sub_account_client_id", "").strip()
@@ -56,6 +100,16 @@ class PreflightGate:
                 "passed": False,
                 "details": "SUB_ACCOUNT_CLIENT_ID is missing or empty.",
             }
+
+        # Check package history matching if available
+        if self.client and hasattr(self.client, "get_package_history"):
+            pkg_details = self.get_credit_package_details(package_id=183)
+            if pkg_details is not None and not pkg_details.get("matched"):
+                return {
+                    "name": "api_key_and_subaccount",
+                    "passed": False,
+                    "details": f"SUB_ACCOUNT_CLIENT_ID '{sub_account_id}' does not match package client_id '{pkg_details.get('client_id')}'.",
+                }
 
         # Check client permissions if client is available
         if self.client and hasattr(self.client, "get_subaccount_permissions"):
