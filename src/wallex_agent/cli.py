@@ -168,27 +168,38 @@ def run_shadow_cmd(args: argparse.Namespace) -> int:
     # Trading cycle loop
     cycle_count = 0
     interval = config.get("scan_interval_seconds", 15.0)
+    base_market_defaults = {
+        "BTCTMN": 4500000000.0,
+        "ETHTMN": 250000000.0,
+        "SOLTMN": 12000000.0,
+        "USDTTMN": 70000.0,
+    }
+
     try:
         while True:
             cycle_count += 1
             now_ts = time.time()
-            # Feed current market snapshot
-            snapshot = {
-                "BTCTMN": {
-                    "current_price": 4500000000.0 + ((cycle_count % 5) * 5000000),
-                    "features": {"return_pct": 0.4, "relative_volume": 1.4, "volatility": 0.01, "latest_volume": 2000000.0},
+            # Feed dynamic multi-market snapshot for all eligible markets in universe
+            snapshot = {}
+            for sym in universe.allowed_symbols:
+                base_p = base_market_defaults.get(sym, 100000.0)
+                # Realistic price oscillation per market
+                drift = 1.0 + (0.001 * (((cycle_count + hash(sym)) % 7) - 3))
+                curr_p = base_p * drift
+                snapshot[sym] = {
+                    "current_price": curr_p,
+                    "features": {
+                        "return_pct": round(((drift - 1.0) * 100.0) + (0.2 * (cycle_count % 3)), 2),
+                        "relative_volume": round(1.2 + (0.2 * ((cycle_count + hash(sym)) % 4)), 2),
+                        "volatility": 0.015,
+                        "latest_volume": 2000000.0,
+                    },
                     "spread_bps": 12.0,
                     "is_stale": False,
-                    "evidence_ids": [f"ev-btc-{cycle_count}"],
-                },
-                "USDTTMN": {
-                    "current_price": 70000.0,
-                    "features": {"return_pct": 0.05, "relative_volume": 1.0, "volatility": 0.002, "latest_volume": 10000000.0},
-                    "spread_bps": 8.0,
-                    "is_stale": False,
-                    "evidence_ids": [f"ev-usdt-{cycle_count}"],
-                },
-            }
+                    "evidence_ids": [f"ev-{sym}-{cycle_count}"],
+                    "quote_timestamp": now_ts,
+                }
+
             res = harness.run_cycle(snapshot, timestamp=now_ts)
             print(
                 f"[CYCLE #{cycle_count:>3}] State: {harness.state:<9} | "

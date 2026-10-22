@@ -235,16 +235,16 @@ class SystemTradingHarness:
             time_ratio = (time_held / max_holding) if max_holding > 0 else 0.0
 
             curr_price = self.prices.get(sym, pos.get("current_price", 1.0))
+            entry_price = pos.get("entry_price", curr_price)
             stop_price = pos.get("stop_price")
-            stop_dist_pct = (
-                ((curr_price - stop_price) / curr_price * 100.0)
-                if (stop_price and curr_price > 0)
-                else 100.0
-            )
 
-            # High priority if held >= 70% of max time or within 2% of stop loss
-            if time_ratio >= 0.7 or stop_dist_pct <= 2.0:
-                urgency = 50.0 + max(time_ratio * 40.0, max(0.0, (2.0 - stop_dist_pct) * 20.0))
+            initial_stop_dist = entry_price - stop_price if (stop_price and entry_price > stop_price) else 0.0
+            current_stop_dist = curr_price - stop_price if (stop_price and curr_price > stop_price) else 0.0
+            loss_dist_ratio = (current_stop_dist / initial_stop_dist) if initial_stop_dist > 0 else 1.0
+
+            # High priority if held >= 70% of max time or remaining stop distance <= 30% of initial buffer
+            if time_ratio >= 0.7 or (loss_dist_ratio <= 0.3 and initial_stop_dist > 0):
+                urgency = 50.0 + max(time_ratio * 40.0, max(0.0, (1.0 - loss_dist_ratio) * 40.0))
                 queue.push(
                     ReviewItem(
                         item_type="POSITION",

@@ -311,3 +311,144 @@ def test_harness_prioritizes_open_position_review_via_priority_queue():
     assert "ETHTMN" not in harness.portfolio["open_positions"]
 
 
+def test_concurrent_multi_positions_and_capacity_limits():
+    telemetry = TelemetryStore(db_path=":memory:")
+    telemetry.initialize()
+    universe = MarketUniverse.build(
+        markets=[
+            {"symbol": "BTCTMN", "is_spot": True, "is_active": True, "amount_precision": 4, "price_precision": 0},
+            {"symbol": "ETHTMN", "is_spot": True, "is_active": True, "amount_precision": 4, "price_precision": 0},
+            {"symbol": "SOLTMN", "is_spot": True, "is_active": True, "amount_precision": 4, "price_precision": 0},
+            {"symbol": "TONTMN", "is_spot": True, "is_active": True, "amount_precision": 4, "price_precision": 0},
+        ],
+        local_denylist=["DUMMY/TMN"],
+        package_unavailable=[],
+    )
+
+    def mock_decide(context):
+        sym = context["symbol"]
+        return {
+            "contract_version": "1.0",
+            "decision_id": f"dec-{sym}",
+            "cycle_id": "cyc-multi",
+            "symbol": sym,
+            "action": "BUY",
+            "strategy_id": "momentum",
+            "horizon_profile": "FAST",
+            "confidence": 0.85,
+            "reason_code": "SIGNAL_VALID",
+            "decision_rationale": f"Breakout on {sym}",
+            "invalidation_condition": "Drop below low",
+            "stop_distance_pct": 1.0,
+            "take_profit_distance_pct": 2.5,
+            "max_holding_minutes": 30,  # 30 minutes so they remain open across cycles
+            "parameter_overrides": {},
+            "evidence_ids": [f"ev-{sym}"],
+        }
+
+    mock_agent = MagicMock()
+    mock_agent.decide.side_effect = mock_decide
+
+    # Initial cash 5,000,000 TMN, max_open_positions=3, max 15% notional per position (750k)
+    risk_engine = RiskEngine(
+        risk_per_trade_equity_pct=0.005,
+        max_position_notional_equity_pct=0.15,
+        max_total_exposure_equity_pct=0.45,
+        min_cash_reserve_equity_pct=0.50,
+        max_open_positions=3,
+        min_notional_tmn=100000.0,
+    )
+
+    harness = SystemTradingHarness(
+        mode="shadow",
+        initial_cash_tmn=5000000.0,
+        universe=universe,
+        decision_agent=mock_agent,
+        risk_engine=risk_engine,
+        telemetry_store=telemetry,
+        initial_prices={
+            "BTCTMN": 4000000000.0,
+            "ETHTMN": 200000000.0,
+            "SOLTMN": 10000000.0,
+            "TONTMN": 500000.0,
+        },
+    )
+
+    # Cycle 1 (t=1000s): Feed BTCTMN opportunity -> Opens Position 1 (BTC)
+    snap1 = {
+        "BTCTMN": {
+            "features": {"return_pct": 2.0, "relative_volume": 2.5, "volatility": 0.01, "latest_volume": 1000.0},
+            "spread_bps": 15.0,
+            "is_stale": False,
+            "evidence_ids": ["ev-BTCTMN"],
+            "current_price": 4000000000.0,
+            "quote_timestamp": 1000.0,
+        }
+    }
+    res1 = harness.run_cycle(snap1, timestamp=1000.0)
+    assert res1["orders_submitted"] == 1
+    assert "BTCTMN" in harness.portfolio["open_positions"]
+    assert len(harness.portfolio["open_positions"]) == 1
+
+    # Cycle 2 (t=1035s): Feed ETHTMN opportunity -> Opens Position 2 (ETH)
+    snap2 = {
+        "ETHTMN": {
+            "features": {"return_pct": 2.2, "relative_volume": 2.8, "volatility": 0.01, "latest_volume": 1200.0},
+            "spread_bps": 15.0,
+            "is_stale": False,
+            "evidence_ids": ["ev-ETHTMN"],
+            "current_price": 200000000.0,
+            "quote_timestamp": 1035.0,
+        }
+    }
+    res2 = harness.run_cycle(snap2, timestamp=1035.0)
+    assert res2["orders_submitted"] == 1
+    assert "ETHTMN" in harness.portfolio["open_positions"]
+    assert len(harness.portfolio["open_positions"]) == 2
+
+    # Cycle 3 (t=1070s): Feed SOLTMN opportunity -> Opens Position 3 (SOL)
+    snap3 = {
+        "SOLTMN": {
+            "features": {"return_pct": 2.5, "relative_volume": 3.0, "volatility": 0.01, "latest_volume": 1500.0},
+            "spread_bps": 15.0,
+            "is_stale": False,
+            "evidence_ids": ["ev-SOLTMN"],
+            "current_price": 10000000.0,
+            "quote_timestamp": 1070.0,
+        }
+    }
+    res3 = harness.run_cycle(snap3, timestamp=1070.0)
+    assert res3["orders_submitted"] == 1
+    assert "SOLTMN" in harness.portfolio["open_positions"]
+    # Exactly 3 concurrent positions open simultaneously!
+    assert len(harness.portfolio["open_positions"]) == 3
+
+    # Verify Cash Reserve and Exposure bounds
+    assert harness.portfolio["available_cash_tmn"] >= 2500000.0  # >= 50% min cash reserve preserved
+    open_syms = set(harness.portfolio["open_positions"].keys())
+    assert open_syms == {"BTCTMN", "ETHTMN", "SOLTMN"}
+
+    # Cycle 4 (t=1105s): Feed 4th opportunity TONTMN -> Must be rejected by POSITION_LIMIT (cap 3)
+    snap4 = {
+        "TONTMN": {
+            "features": {"return_pct": 3.0, "relative_volume": 4.0, "volatility": 0.01, "latest_volume": 2000.0},
+            "spread_bps": 15.0,
+            "is_stale": False,
+            "evidence_ids": ["ev-TONTMN"],
+            "current_price": 500000.0,
+            "quote_timestamp": 1105.0,
+        }
+    }
+    res4 = harness.run_cycle(snap4, timestamp=1105.0)
+    assert res4["orders_submitted"] == 0
+    assert len(harness.portfolio["open_positions"]) == 3
+    assert "TONTMN" not in harness.portfolio["open_positions"]
+    assert any(rej["reject_code"] == "POSITION_LIMIT" for rej in harness.recent_rejections)
+
+    # Cycle 5 (t=1140s): Repeat opportunity on already open BTCTMN -> Must be rejected (Anti-averaging down)
+    res5 = harness.run_cycle(snap1, timestamp=1140.0)
+    assert res5["orders_submitted"] == 0
+    assert len(harness.portfolio["open_positions"]) == 3
+
+
+
