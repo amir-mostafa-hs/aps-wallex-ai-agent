@@ -163,13 +163,28 @@ def test_dashboard_html_view(client: TestClient):
 
 def test_dashboard_backtest_endpoint(client: TestClient):
     headers = {"Authorization": "Bearer super-secret-token"}
-    res = client.post("/api/backtest/run", json={"cycles": 10}, headers=headers)
+    payload = {
+        "cycles": 10,
+        "strategy_id": "trend_following",
+        "stop_distance_pct": 1.2,
+        "take_profit_distance_pct": 2.5,
+        "max_holding_minutes": 10,
+    }
+    res = client.post("/api/backtest/run", json=payload, headers=headers)
     assert res.status_code == 200
     data = res.json()
     assert "summary" in data
     assert data["initial_capital_tmn"] == 5000000.0
     assert "final_equity_tmn" in data
+    assert "gross_pnl_tmn" in data
+    assert "total_fees_tmn" in data
+    assert "net_pnl_tmn" in data
+    assert data["strategy_id"] == "trend_following"
+    assert data["stop_distance_pct"] == 1.2
+    assert data["take_profit_distance_pct"] == 2.5
+    assert data["max_holding_minutes"] == 10
     assert "trades" in data
+
 
 
 def test_dashboard_audit_reports_endpoint(client: TestClient):

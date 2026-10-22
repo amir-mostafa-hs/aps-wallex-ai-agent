@@ -429,10 +429,12 @@ class SystemTradingHarness:
             stop_price = (decision.get("projected_stop_price") if decision else None) or (price * 0.99)
             take_profit_price = (decision.get("projected_take_profit_price") if decision else None) or (price * 1.02)
             max_holding_seconds = (float(intent["max_holding_minutes"]) * 60.0) if (intent and intent.get("max_holding_minutes")) else 300.0
+            strat_id = (intent.get("strategy_id") if intent else "momentum") or "momentum"
 
             self.portfolio["open_positions"][sym] = {
                 "position_id": f"pos-{order['client_id']}",
                 "symbol": sym,
+                "strategy_id": strat_id,
                 "quantity": qty,
                 "entry_price": price,
                 "current_price": price,
@@ -461,7 +463,7 @@ class SystemTradingHarness:
                 trade: TradeRecord = {
                     "trade_id": f"tr-{order['client_id']}",
                     "symbol": sym,
-                    "strategy_id": "momentum",
+                    "strategy_id": pos.get("strategy_id", "momentum"),
                     "horizon_profile": "FAST",
                     "entry_price": pos["entry_price"],
                     "exit_price": price,
@@ -492,6 +494,10 @@ def run_simulation_backtest(
     initial_cash_tmn: float = 5000000.0,
     heuristic_mode: bool = True,
     telemetry_db_path: str = ":memory:",
+    strategy_id: str = "momentum",
+    stop_distance_pct: float = 1.0,
+    take_profit_distance_pct: float = 2.0,
+    max_holding_minutes: int = 5,
 ) -> dict[str, Any]:
     """Executes a standardized multi-scenario simulated backtest."""
     telemetry = TelemetryStore(db_path=telemetry_db_path)
@@ -508,11 +514,19 @@ def run_simulation_backtest(
         package_unavailable=[],
     )
 
+    decision_agent = DecisionAgent(
+        heuristic_mode=heuristic_mode,
+        default_strategy=strategy_id,
+        default_stop_pct=stop_distance_pct,
+        default_take_profit_pct=take_profit_distance_pct,
+        default_max_holding_minutes=max_holding_minutes,
+    )
+
     harness = SystemTradingHarness(
         mode="backtest",
         initial_cash_tmn=initial_cash_tmn,
         universe=universe,
-        decision_agent=DecisionAgent(heuristic_mode=heuristic_mode),
+        decision_agent=decision_agent,
         risk_engine=RiskEngine(
             risk_per_trade_equity_pct=0.005,
             max_position_notional_equity_pct=0.15,
@@ -550,14 +564,22 @@ def run_simulation_backtest(
     final_equity = harness.portfolio["total_equity_tmn"]
     net_pnl = final_equity - initial_cash_tmn
     roi_pct = (net_pnl / initial_cash_tmn) * 100
+    gross_pnl = sum(float(t.get("gross_realized_pnl_tmn", 0.0)) for t in trades)
+    total_fees = float(harness.cumulative_fees_tmn)
 
     return {
         "harness": harness,
         "telemetry": telemetry,
         "initial_capital_tmn": initial_cash_tmn,
         "final_equity_tmn": final_equity,
+        "gross_pnl_tmn": gross_pnl,
+        "total_fees_tmn": total_fees,
         "net_pnl_tmn": net_pnl,
         "roi_pct": roi_pct,
+        "strategy_id": strategy_id,
+        "stop_distance_pct": stop_distance_pct,
+        "take_profit_distance_pct": take_profit_distance_pct,
+        "max_holding_minutes": max_holding_minutes,
         "summary": summary,
         "trades": trades,
     }

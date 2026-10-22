@@ -147,6 +147,7 @@ class OrderRecord(TypedDict):
 class PositionRecord(TypedDict):
     position_id: str
     symbol: str
+    strategy_id: NotRequired[StrategyId | None]
     quantity: float
     entry_price: float
     current_price: float
@@ -158,6 +159,7 @@ class PositionRecord(TypedDict):
     opened_at: float
     max_holding_seconds: float
     is_open: bool
+
 
 
 class TradeRecord(TypedDict):

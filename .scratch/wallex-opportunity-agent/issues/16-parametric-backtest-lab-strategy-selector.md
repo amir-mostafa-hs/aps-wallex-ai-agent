@@ -5,10 +5,11 @@
 
 **Blocked by:** 15: پالایش محاسبه برتری خالص (Net Edge) در موتور ریسک با کارمزد واقعی
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] پشتیبانی اندپوینت `/api/backtest/run` از فیلدهای ورودی `strategy_id`, `stop_distance_pct`, `take_profit_distance_pct`, `max_holding_minutes`
-- [ ] به‌روزرسانی فرم زبانه Backtest Lab در داشبورد با المان‌های Select برای استراتژی و اسلایدرهای عددی
-- [ ] اجرای شبیه‌سازی مطابق پارامترهای دریافتی کاربر از طریق Seam متمرکز `run_simulation_backtest`
-- [ ] تفکیک سود ناخالص، کل کارمزد و سود خالص محقق‌شده در کارت نتایج بک‌تست
-- [ ] آزمون‌های اعتبارسنجی در `tests/test_dashboard.py` و `tests/test_harness.py`
+- [x] پشتیبانی اندپوینت `/api/backtest/run` از فیلدهای ورودی `strategy_id`, `stop_distance_pct`, `take_profit_distance_pct`, `max_holding_minutes`
+- [x] به‌روزرسانی فرم زبانه Backtest Lab در داشبورد با المان‌های Select برای استراتژی و اسلایدرهای عددی
+- [x] اجرای شبیه‌سازی مطابق پارامترهای دریافتی کاربر از طریق Seam متمرکز `run_simulation_backtest`
+- [x] تفکیک سود ناخالص، کل کارمزد و سود خالص محقق‌شده در کارت نتایج بک‌تست
+- [x] آزمون‌های اعتبارسنجی در `tests/test_dashboard.py` و `tests/test_harness.py`
+

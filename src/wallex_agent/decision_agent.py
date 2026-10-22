@@ -132,7 +132,15 @@ class HTTPOpenAIClient:
 class DecisionAgent:
     """Orchestrates structured AI trading decisions with zero private execution access."""
 
-    def __init__(self, llm_client: Any = None, heuristic_mode: bool = False) -> None:
+    def __init__(
+        self,
+        llm_client: Any = None,
+        heuristic_mode: bool = False,
+        default_strategy: str = "momentum",
+        default_stop_pct: float = 1.0,
+        default_take_profit_pct: float = 2.0,
+        default_max_holding_minutes: int = 5,
+    ) -> None:
         if llm_client is None and not heuristic_mode:
             llm_key = os.getenv("LLM_API_KEY", "").strip()
             if llm_key:
@@ -144,6 +152,10 @@ class DecisionAgent:
         else:
             self.llm_client = llm_client
         self.heuristic_mode = heuristic_mode
+        self.default_strategy = default_strategy
+        self.default_stop_pct = default_stop_pct
+        self.default_take_profit_pct = default_take_profit_pct
+        self.default_max_holding_minutes = default_max_holding_minutes
 
     def decide(self, context: Mapping[str, Any]) -> TradeIntent:
         """Invokes the decision model or returns a safe deterministic fallback intent."""
@@ -160,22 +172,41 @@ class DecisionAgent:
                 features = context.get("features", {})
                 ret = float(features.get("return_pct", 0.0))
                 rvol = float(features.get("relative_volume", 0.0))
-                if ret > 0.0 and rvol >= 1.0 and not has_open_position:
+
+                should_buy = False
+                rationale = ""
+                strat = self.default_strategy
+
+                if strat == "trend_following":
+                    if ret >= 0.05 and not has_open_position:
+                        should_buy = True
+                        rationale = f"Trend following trigger (ret={ret:.2f}%)"
+                elif strat == "mean_reversion":
+                    if ret < 0.0 and not has_open_position:
+                        should_buy = True
+                        rationale = f"Mean reversion bounce trigger (ret={ret:.2f}%)"
+                else:  # momentum
+                    strat = "momentum"
+                    if ret > 0.0 and rvol >= 1.0 and not has_open_position:
+                        should_buy = True
+                        rationale = f"Quantitative momentum trigger (ret={ret:.2f}%, rvol={rvol:.2f})"
+
+                if should_buy:
                     return {
                         "contract_version": "1.0",
                         "decision_id": decision_id,
                         "cycle_id": cycle_id,
                         "symbol": symbol,
                         "action": "BUY",
-                        "strategy_id": "momentum",
+                        "strategy_id": strat,
                         "horizon_profile": "FAST",
                         "confidence": 0.85,
                         "reason_code": "SIGNAL_VALID",
-                        "decision_rationale": f"Quantitative momentum trigger (ret={ret:.2f}%, rvol={rvol:.2f})",
-                        "invalidation_condition": "Loss of short-term volume momentum",
-                        "stop_distance_pct": 1.0,
-                        "take_profit_distance_pct": 2.0,
-                        "max_holding_minutes": 5,
+                        "decision_rationale": rationale,
+                        "invalidation_condition": "Loss of technical setup conditions",
+                        "stop_distance_pct": self.default_stop_pct,
+                        "take_profit_distance_pct": self.default_take_profit_pct,
+                        "max_holding_minutes": self.default_max_holding_minutes,
                         "parameter_overrides": {},
                         "evidence_ids": list(evidence_ids),
                     }

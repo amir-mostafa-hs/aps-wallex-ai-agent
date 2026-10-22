@@ -451,4 +451,29 @@ def test_concurrent_multi_positions_and_capacity_limits():
     assert len(harness.portfolio["open_positions"]) == 3
 
 
+def test_run_simulation_backtest_with_custom_strategy_and_parameters():
+    from wallex_agent.harness import run_simulation_backtest
+
+    res = run_simulation_backtest(
+        cycles=30,
+        strategy_id="mean_reversion",
+        stop_distance_pct=1.5,
+        take_profit_distance_pct=3.0,
+        max_holding_minutes=15,
+    )
+
+    assert res["initial_capital_tmn"] == 5000000.0
+    assert "final_equity_tmn" in res
+    assert "gross_pnl_tmn" in res
+    assert "total_fees_tmn" in res
+    assert "net_pnl_tmn" in res
+    assert "roi_pct" in res
+    assert res["strategy_id"] == "mean_reversion"
+    assert res["stop_distance_pct"] == 1.5
+    assert res["take_profit_distance_pct"] == 3.0
+    assert res["max_holding_minutes"] == 15
+    assert res["gross_pnl_tmn"] - res["total_fees_tmn"] == pytest.approx(res["net_pnl_tmn"], abs=1e-2)
+
+
+
 

@@ -142,25 +142,52 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
     <!-- TAB 2: BACKTEST LAB -->
     <div id="tab-backtest" class="tab-content">
         <div class="card">
-            <h2>اجرای بک‌تست تاریخی و شبیه‌سازی بازار</h2>
-            <p style="color: var(--text-muted); font-size: 0.9rem;">شبیه‌سازی کامل چرخه تصمیم‌گیری هوش مصنوعی، فیلتر دن‌لیست، محدودیت‌های نقدینگی و اسلیپیج بدون نیاز به اتصال به صرافی</p>
-            <div style="display: flex; gap: 12px; align-items: center; margin-top: 15px;">
-                <label>تعداد چرخه‌های شبیه‌سازی:</label>
-                <input type="number" id="btCycles" value="50" min="10" max="500" style="background: #0f172a; border: 1px solid var(--card-border); color: #fff; padding: 8px 12px; border-radius: 6px; width: 100px;">
-                <button id="btnRunBt" class="action-btn btn-primary" onclick="runBacktest()">شروع بک‌تست گرافیکی</button>
+            <h2>آزمایشگاه بک‌تست تاریخی و شبیه‌سازی پارامتریک</h2>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">شبیه‌سازی کامل چرخه تصمیم‌گیری هوش مصنوعی، تنظیم استراتژی، بررسی برتری آماری (Net Edge) و سنجش هزینه اصطکاک و کارمزد</p>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 15px; background: rgba(15,23,42,0.6); padding: 16px; border-radius: 8px; border: 1px solid var(--card-border);">
+                <div>
+                    <label style="display: block; margin-bottom: 6px; font-size: 0.85rem; color: #94a3b8;">استراتژی معاملاتی:</label>
+                    <select id="btStrategy" style="background: #0f172a; border: 1px solid var(--card-border); color: #fff; padding: 8px 12px; border-radius: 6px; width: 100%;">
+                        <option value="momentum" selected>ممانتوم پرسرعت (Momentum)</option>
+                        <option value="trend_following">تعقیب روند صعودی (Trend Following)</option>
+                        <option value="mean_reversion">بازگشت به میانگین / پولبک (Mean Reversion)</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 6px; font-size: 0.85rem; color: #94a3b8;">حد ضرر اسمی (% SL):</label>
+                    <input type="number" id="btStopPct" value="1.0" min="0.5" max="5.0" step="0.1" style="background: #0f172a; border: 1px solid var(--card-border); color: #fff; padding: 8px 12px; border-radius: 6px; width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 6px; font-size: 0.85rem; color: #94a3b8;">حد سود هدفی (% TP):</label>
+                    <input type="number" id="btTakeProfitPct" value="2.0" min="1.0" max="10.0" step="0.1" style="background: #0f172a; border: 1px solid var(--card-border); color: #fff; padding: 8px 12px; border-radius: 6px; width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 6px; font-size: 0.85rem; color: #94a3b8;">سقف زمان نگهداری (دقیقه):</label>
+                    <input type="number" id="btMaxHolding" value="5" min="1" max="60" step="1" style="background: #0f172a; border: 1px solid var(--card-border); color: #fff; padding: 8px 12px; border-radius: 6px; width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 6px; font-size: 0.85rem; color: #94a3b8;">تعداد چرخه‌های شبیه‌سازی:</label>
+                    <input type="number" id="btCycles" value="50" min="10" max="500" step="10" style="background: #0f172a; border: 1px solid var(--card-border); color: #fff; padding: 8px 12px; border-radius: 6px; width: 100%;">
+                </div>
+            </div>
+            <div style="margin-top: 15px;">
+                <button id="btnRunBt" class="action-btn btn-primary" onclick="runBacktest()">شروع بک‌تست پارامتریک</button>
             </div>
         </div>
 
         <div id="btResultsCard" class="card" style="display: none;">
-            <h2>نتیجه عملکرد بک‌تست</h2>
+            <h2>نتیجه عملکرد بک‌تست پارامتریک</h2>
             <div class="grid">
                 <div class="metric-box"><div class="metric-label">سود / زیان خالص محقق‌شده</div><div id="btNetPnl" class="metric-val">0 TMN</div></div>
+                <div class="metric-box"><div class="metric-label">سود ناخالص (Gross P&L)</div><div id="btGrossPnl" class="metric-val">0 TMN</div></div>
+                <div class="metric-box"><div class="metric-label">مجموع کارمزد صرافی (Friction)</div><div id="btTotalFees" class="metric-val">0 TMN</div></div>
+                <div class="metric-box"><div class="metric-label">بازدهی سرمایه (ROI)</div><div id="btRoi" class="metric-val">0%</div></div>
                 <div class="metric-box"><div class="metric-label">نرخ برد (Win Rate)</div><div id="btWinRate" class="metric-val">0%</div></div>
                 <div class="metric-box"><div class="metric-label">کل معاملات بسته‌شده</div><div id="btTradesCount" class="metric-val">0</div></div>
                 <div class="metric-box"><div class="metric-label">حداکثر افت سرمایه (Max DD)</div><div id="btMaxDd" class="metric-val">0%</div></div>
             </div>
 
-            <h3 style="margin-top: 20px; color: var(--primary);">ریز معاملات انجام‌شده در بک‌تست</h3>
+            <h3 style="margin-top: 20px; color: var(--primary);">ریز معاملات انجام‌شده در شبیه‌سازی</h3>
             <div id="btTradesTableContainer"></div>
         </div>
     </div>
@@ -251,6 +278,10 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
         async function runBacktest() {
             const btn = document.getElementById('btnRunBt');
             const cycles = document.getElementById('btCycles').value || 50;
+            const strategy = document.getElementById('btStrategy').value || 'momentum';
+            const stopPct = document.getElementById('btStopPct').value || 1.0;
+            const tpPct = document.getElementById('btTakeProfitPct').value || 2.0;
+            const maxHolding = document.getElementById('btMaxHolding').value || 5;
             const token = getToken();
             btn.innerHTML = 'در حال شبیه‌سازی... <span class="spinner"></span>';
             btn.disabled = true;
@@ -259,28 +290,39 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                 const res = await fetch('/api/backtest/run', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ cycles: parseInt(cycles) })
+                    body: JSON.stringify({
+                        cycles: parseInt(cycles),
+                        strategy_id: strategy,
+                        stop_distance_pct: parseFloat(stopPct),
+                        take_profit_distance_pct: parseFloat(tpPct),
+                        max_holding_minutes: parseInt(maxHolding)
+                    })
                 });
                 if (!res.ok) throw new Error("شکست در اجرای بک‌تست");
                 const data = await res.json();
                 document.getElementById('btResultsCard').style.display = 'block';
                 document.getElementById('btNetPnl').innerText = Number(data.net_pnl_tmn).toLocaleString() + ' TMN';
                 document.getElementById('btNetPnl').style.color = data.net_pnl_tmn >= 0 ? '#34d399' : '#f87171';
+                document.getElementById('btGrossPnl').innerText = Number(data.gross_pnl_tmn).toLocaleString() + ' TMN';
+                document.getElementById('btGrossPnl').style.color = data.gross_pnl_tmn >= 0 ? '#34d399' : '#f87171';
+                document.getElementById('btTotalFees').innerText = Number(data.total_fees_tmn).toLocaleString() + ' TMN';
+                document.getElementById('btRoi').innerText = (data.roi_pct >= 0 ? '+' : '') + data.roi_pct.toFixed(2) + '%';
+                document.getElementById('btRoi').style.color = data.roi_pct >= 0 ? '#34d399' : '#f87171';
                 document.getElementById('btWinRate').innerText = data.summary.win_rate_pct.toFixed(1) + '%';
                 document.getElementById('btTradesCount').innerText = data.summary.total_trades;
                 document.getElementById('btMaxDd').innerText = data.summary.max_drawdown_pct.toFixed(2) + '%';
 
                 const trades = data.trades || [];
                 if (trades.length > 0) {
-                    let rows = trades.map(t => `<tr><td>${t.symbol}</td><td>${t.quantity}</td><td>${Number(t.entry_price).toLocaleString()}</td><td>${Number(t.exit_price).toLocaleString()}</td><td style="color:${t.net_realized_pnl_tmn>=0?'#34d399':'#f87171'}">${Number(t.net_realized_pnl_tmn).toLocaleString()}</td><td>${Number(t.total_fee_tmn).toLocaleString()}</td><td>${t.exit_reason}</td></tr>`).join('');
-                    document.getElementById('btTradesTableContainer').innerHTML = `<table><thead><tr><th>نماد</th><th>حجم</th><th>قیمت ورود</th><th>قیمت خروج</th><th>سود/زیان خالص</th><th>کارمزد</th><th>دلیل خروج</th></tr></thead><tbody>${rows}</tbody></table>`;
+                    let rows = trades.map(t => `<tr><td>${t.symbol}</td><td><span class="badge badge-running">${t.strategy_id || 'momentum'}</span></td><td>${t.quantity}</td><td>${Number(t.entry_price).toLocaleString()}</td><td>${Number(t.exit_price).toLocaleString()}</td><td style="color:${t.gross_realized_pnl_tmn>=0?'#34d399':'#f87171'}">${Number(t.gross_realized_pnl_tmn).toLocaleString()}</td><td>${Number(t.total_fee_tmn).toLocaleString()}</td><td style="font-weight:bold;color:${t.net_realized_pnl_tmn>=0?'#34d399':'#f87171'}">${Number(t.net_realized_pnl_tmn).toLocaleString()}</td><td>${t.exit_reason}</td></tr>`).join('');
+                    document.getElementById('btTradesTableContainer').innerHTML = `<table><thead><tr><th>نماد</th><th>استراتژی</th><th>حجم</th><th>قیمت ورود</th><th>قیمت خروج</th><th>سود ناخالص</th><th>کارمزد</th><th>سود خالص</th><th>دلیل خروج</th></tr></thead><tbody>${rows}</tbody></table>`;
                 } else {
                     document.getElementById('btTradesTableContainer').innerHTML = '<p style="color: var(--text-muted);">معامله بسته‌شده‌ای در این بازه ثبت نشد.</p>';
                 }
             } catch(e) {
                 alert("خطا در بک‌تست: " + e.message);
             } finally {
-                btn.innerHTML = 'شروع بک‌تست گرافیکی';
+                btn.innerHTML = 'شروع بک‌تست پارامتریک';
                 btn.disabled = false;
             }
         }
@@ -451,17 +493,36 @@ def create_dashboard_app(harness: SystemTradingHarness, auth_token: str = "super
         }
 
     @app.post("/api/backtest/run")
-    def run_backtest_endpoint(payload: dict[str, Any] = Body(default={"cycles": 50}), _auth: bool = Depends(verify_auth)):
+    def run_backtest_endpoint(payload: dict[str, Any] = Body(default={}), _auth: bool = Depends(verify_auth)):
         """Executes a backtest simulation and returns performance statistics."""
         cycles = int(payload.get("cycles", 50))
-        result = run_simulation_backtest(cycles=cycles)
+        strategy_id = str(payload.get("strategy_id", "momentum")).strip()
+        stop_distance_pct = float(payload.get("stop_distance_pct", 1.0))
+        take_profit_distance_pct = float(payload.get("take_profit_distance_pct", 2.0))
+        max_holding_minutes = int(payload.get("max_holding_minutes", 5))
+
+        result = run_simulation_backtest(
+            cycles=cycles,
+            strategy_id=strategy_id,
+            stop_distance_pct=stop_distance_pct,
+            take_profit_distance_pct=take_profit_distance_pct,
+            max_holding_minutes=max_holding_minutes,
+        )
         return {
             "initial_capital_tmn": result["initial_capital_tmn"],
             "final_equity_tmn": result["final_equity_tmn"],
+            "gross_pnl_tmn": result["gross_pnl_tmn"],
+            "total_fees_tmn": result["total_fees_tmn"],
             "net_pnl_tmn": result["net_pnl_tmn"],
+            "roi_pct": result["roi_pct"],
+            "strategy_id": result["strategy_id"],
+            "stop_distance_pct": result["stop_distance_pct"],
+            "take_profit_distance_pct": result["take_profit_distance_pct"],
+            "max_holding_minutes": result["max_holding_minutes"],
             "summary": result["summary"],
             "trades": result["trades"],
         }
+
 
     @app.get("/api/reports/audit")
     def get_audit_report(_auth: bool = Depends(verify_auth)):
