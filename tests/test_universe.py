@@ -70,7 +70,9 @@ def test_build_market_universe_filters_inactive_and_denylisted():
     allowlist = universe.get_allowlist()
     assert len(allowlist) == 1
     assert allowlist[0]["symbol"] == "BTCTMN"
+    assert universe.allowed_symbols == ["BTCTMN"]
     assert universe.is_allowed("BTCTMN") is True
+
     assert universe.is_allowed("ATMN") is False
     assert universe.is_allowed("OMTMN") is False
     assert universe.is_allowed("FUTURES_PAIR") is False

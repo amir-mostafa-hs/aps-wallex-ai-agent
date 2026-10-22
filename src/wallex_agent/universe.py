@@ -135,5 +135,11 @@ class MarketUniverse:
         return (info["amount_precision"], info["price_precision"])
 
     @property
+    def allowed_symbols(self) -> list[str]:
+        """Returns the list of allowed symbol strings."""
+        return list(self._by_symbol.keys())
+
+    @property
     def total_count(self) -> int:
         return len(self._allowlist)
+
