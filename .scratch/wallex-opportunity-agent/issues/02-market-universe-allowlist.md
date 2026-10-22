@@ -7,14 +7,14 @@ An automated market universe manager that ingests active markets from the offici
 01: Project Foundation, Core Types & Config
 
 **Status:**
-ready-for-agent
+resolved
 
 ## Acceptance Criteria
 
-- [ ] Ingests all available markets and filters exclusively for active Spot markets (`is_spot: true`).
-- [ ] Normalizes symbol formats across local and remote sources (removing slashes, converting to uppercase).
-- [ ] Unions the local denylist with the live package 183 unavailable markets list.
-- [ ] Produces the tradeable Spot allowlist (matching the verified 120 markets universe).
-- [ ] Extracts and attaches `amount_precision` (step size) and `price_precision` (tick size) per market.
-- [ ] Operates Fail-Closed: if denylist or market data is missing or corrupted, the allowlist is empty and live trading is disabled.
-- [ ] Unit and integration tests verify allowlist computation, symbol normalization, and fail-closed error handling.
+- [x] Ingests all available markets and filters exclusively for active Spot markets (`is_spot: true`).
+- [x] Normalizes symbol formats across local and remote sources (removing slashes, converting to uppercase).
+- [x] Unions the local denylist with the live package 183 unavailable markets list.
+- [x] Produces the tradeable Spot allowlist (matching the verified 120 markets universe).
+- [x] Extracts and attaches `amount_precision` (step size) and `price_precision` (tick size) per market.
+- [x] Operates Fail-Closed: if denylist or market data is missing or corrupted, the allowlist is empty and live trading is disabled.
+- [x] Unit and integration tests verify allowlist computation, symbol normalization, and fail-closed error handling.
