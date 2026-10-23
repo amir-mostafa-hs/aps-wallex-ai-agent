@@ -4,6 +4,7 @@ import json
 import sqlite3
 from typing import Any, Mapping, Sequence, Literal
 from wallex_agent.domain.types import TradeRecord
+from wallex_agent.domain.accounting import compute_trade_pnl, calculate_mtm_equity_decimal
 
 
 def calculate_trade_pnl(
@@ -13,11 +14,9 @@ def calculate_trade_pnl(
     entry_fee: float = 0.0,
     exit_fee: float = 0.0,
 ) -> tuple[float, float]:
-    """Calculates deterministic gross and net realized P&L in TMN."""
-    gross_pnl = (exit_price - entry_price) * quantity
-    total_fees = entry_fee + exit_fee
-    net_pnl = gross_pnl - total_fees
-    return (gross_pnl, net_pnl)
+    """Calculates deterministic gross and net realized P&L in TMN via Decimal accounting."""
+    res = compute_trade_pnl(entry_price, exit_price, quantity, entry_fee, exit_fee)
+    return (float(res["gross_pnl"]), float(res["net_pnl"]))
 
 
 def calculate_mtm_equity(
@@ -25,24 +24,9 @@ def calculate_mtm_equity(
     positions: Mapping[str, Mapping[str, Any]],
     current_bids: Mapping[str, float],
 ) -> tuple[float, float]:
-    """Calculates Mark-to-Market Total Equity and Unrealized P&L in TMN."""
-    open_val = 0.0
-    cost_basis = 0.0
-
-    for pos in positions.values():
-        if not pos.get("is_open", True):
-            continue
-        sym = pos["symbol"]
-        qty = float(pos["quantity"])
-        entry = float(pos["entry_price"])
-        bid = current_bids.get(sym, entry)
-
-        open_val += qty * bid
-        cost_basis += qty * entry
-
-    total_equity = cash + open_val
-    mtm_pnl = open_val - cost_basis
-    return (total_equity, mtm_pnl)
+    """Calculates Mark-to-Market Total Equity and Unrealized P&L in TMN via Decimal accounting."""
+    eq, pnl = calculate_mtm_equity_decimal(cash, positions, current_bids)
+    return (float(eq), float(pnl))
 
 
 def classify_loss_cause(
