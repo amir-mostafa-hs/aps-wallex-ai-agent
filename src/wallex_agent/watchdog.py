@@ -86,6 +86,90 @@ class LocalWatchdog:
 
         return None
 
+    def check_candle(
+        self,
+        pos: PositionRecord,
+        candle: Mapping[str, Any],
+        current_time: float | None = None,
+    ) -> WatchdogTrigger | None:
+        """Evaluates position against a complete price candle [low, high, close] with conservative stop-loss priority."""
+        if not pos.get("is_open", True):
+            return None
+
+        symbol = pos["symbol"]
+        pos_id = pos["position_id"]
+        qty = pos["quantity"]
+
+        candle_low = float(candle["low"])
+        candle_high = float(candle["high"])
+        candle_close = float(candle["close"])
+        candle_open = float(candle.get("open", candle_close))
+        ts = float(candle.get("timestamp", current_time if current_time is not None else 0.0))
+        eval_time = current_time if current_time is not None else ts
+
+        stop_price = float(pos["stop_price"])
+        tp_price = float(pos["take_profit_price"]) if pos.get("take_profit_price") is not None else None
+
+        sl_hit = candle_low <= stop_price
+        tp_hit = (tp_price is not None) and (candle_high >= tp_price)
+
+        # Conservative rule: If both SL and TP are touched in the same candle,
+        # prioritize STOP_LOSS to prevent optimistic backtest overfitting.
+        if sl_hit and tp_hit:
+            exit_price = min(stop_price, candle_open)
+            return {
+                "trigger_type": "STOP_LOSS",
+                "symbol": symbol,
+                "position_id": pos_id,
+                "position_quantity": qty,
+                "trigger_price": exit_price,
+                "timestamp": eval_time,
+                "reason": (
+                    f"Both SL ({stop_price}) and TP ({tp_price}) touched within candle "
+                    f"range [{candle_low}, {candle_high}]. Conservative resolution triggered STOP_LOSS at {exit_price}"
+                ),
+            }
+
+        if sl_hit:
+            exit_price = min(stop_price, candle_open)
+            return {
+                "trigger_type": "STOP_LOSS",
+                "symbol": symbol,
+                "position_id": pos_id,
+                "position_quantity": qty,
+                "trigger_price": exit_price,
+                "timestamp": eval_time,
+                "reason": f"Candle low {candle_low} breached hard stop-loss {stop_price}",
+            }
+
+        if tp_hit and tp_price is not None:
+            exit_price = max(tp_price, candle_open)
+            return {
+                "trigger_type": "TAKE_PROFIT",
+                "symbol": symbol,
+                "position_id": pos_id,
+                "position_quantity": qty,
+                "trigger_price": exit_price,
+                "timestamp": eval_time,
+                "reason": f"Candle high {candle_high} reached take-profit target {tp_price}",
+            }
+
+        # Check maximum holding duration expiry
+        elapsed = eval_time - pos["opened_at"]
+        max_duration = pos["max_holding_seconds"]
+        if elapsed >= max_duration:
+            return {
+                "trigger_type": "TIME_EXPIRY",
+                "symbol": symbol,
+                "position_id": pos_id,
+                "position_quantity": qty,
+                "trigger_price": candle_close,
+                "timestamp": eval_time,
+                "reason": f"Position duration {elapsed:.1f}s exceeded max limit {max_duration:.1f}s",
+            }
+
+        return None
+
     def check_all(
         self,
         positions: Sequence[PositionRecord],
