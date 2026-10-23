@@ -46,7 +46,26 @@ def quantize_qty(
     return d.quantize(step, rounding=rounding)
 
 
-class TradeFinancials(TypedDict):
+def convert_quote_to_tmn(
+    amount: str | float | int | Decimal,
+    quote_currency: str,
+    usdttmn_rate: str | float | int | Decimal = Decimal("1"),
+) -> Decimal:
+    """Converts an amount in quote currency (TMN or USDT) to TMN using Decimal."""
+    amt = to_decimal(amount)
+    quote = quote_currency.strip().upper()
+    if quote in ("TMN", "TOMAN", "IRT"):
+        return amt
+    elif quote in ("USDT", "USD"):
+        rate = to_decimal(usdttmn_rate)
+        if rate <= Decimal("0"):
+            raise ValueError(f"Invalid USDTTMN rate: {usdttmn_rate}")
+        return amt * rate
+    else:
+        raise ValueError(f"Unsupported quote currency for TMN conversion: {quote_currency}")
+
+
+class TradeFinancials(TypedDict, total=False):
     entry_price: Decimal
     exit_price: Decimal
     quantity: Decimal
@@ -58,6 +77,11 @@ class TradeFinancials(TypedDict):
     gross_pnl: Decimal
     net_pnl: Decimal
     return_pct: Decimal
+    gross_pnl_tmn: Decimal
+    net_pnl_tmn: Decimal
+    total_fee_tmn: Decimal
+    entry_notional_tmn: Decimal
+    exit_notional_tmn: Decimal
 
 
 def compute_trade_pnl(
@@ -66,8 +90,10 @@ def compute_trade_pnl(
     quantity: str | float | int | Decimal,
     entry_fee: str | float | int | Decimal = 0,
     exit_fee: str | float | int | Decimal = 0,
+    quote_asset: str = "TMN",
+    usdttmn_rate: str | float | int | Decimal = Decimal("1"),
 ) -> TradeFinancials:
-    """Computes exact gross and net P&L and return percentage using Decimal precision in TMN."""
+    """Computes exact gross and net P&L and return percentage using Decimal precision in quote and TMN."""
     e_price = to_decimal(entry_price)
     x_price = to_decimal(exit_price)
     qty = to_decimal(quantity)
@@ -85,6 +111,23 @@ def compute_trade_pnl(
     else:
         return_pct = Decimal("0")
 
+    quote_upper = quote_asset.strip().upper()
+    if quote_upper in ("USDT", "USD"):
+        rate = to_decimal(usdttmn_rate)
+        if rate <= Decimal("0"):
+            raise ValueError(f"Invalid USDTTMN rate: {usdttmn_rate}")
+        gross_pnl_tmn = gross_pnl * rate
+        total_fee_tmn = total_fee * rate
+        net_pnl_tmn = net_pnl * rate
+        entry_notional_tmn = entry_notional * rate
+        exit_notional_tmn = exit_notional * rate
+    else:
+        gross_pnl_tmn = gross_pnl
+        total_fee_tmn = total_fee
+        net_pnl_tmn = net_pnl
+        entry_notional_tmn = entry_notional
+        exit_notional_tmn = exit_notional
+
     return {
         "entry_price": e_price,
         "exit_price": x_price,
@@ -97,6 +140,11 @@ def compute_trade_pnl(
         "gross_pnl": gross_pnl,
         "net_pnl": net_pnl,
         "return_pct": return_pct,
+        "gross_pnl_tmn": gross_pnl_tmn,
+        "net_pnl_tmn": net_pnl_tmn,
+        "total_fee_tmn": total_fee_tmn,
+        "entry_notional_tmn": entry_notional_tmn,
+        "exit_notional_tmn": exit_notional_tmn,
     }
 
 
@@ -104,23 +152,31 @@ def calculate_mtm_equity_decimal(
     cash: str | float | int | Decimal,
     positions: Mapping[str, Mapping[str, Any]],
     current_bids: Mapping[str, Any],
+    usdttmn_rate: str | float | int | Decimal = Decimal("1"),
 ) -> tuple[Decimal, Decimal]:
     """Calculates Mark-to-Market Total Equity and Unrealized P&L in TMN using Decimal."""
-    open_val = Decimal("0")
-    cost_basis = Decimal("0")
+    open_val_tmn = Decimal("0")
+    cost_basis_tmn = Decimal("0")
+    usdttmn = to_decimal(usdttmn_rate)
 
     for pos in positions.values():
         if not pos.get("is_open", True):
             continue
-        sym = str(pos["symbol"])
+        sym = str(pos["symbol"]).upper()
         qty = to_decimal(pos["quantity"])
         entry = to_decimal(pos["entry_price"])
         bid_raw = current_bids.get(sym, entry)
         bid = to_decimal(bid_raw)
 
-        open_val += qty * bid
-        cost_basis += qty * entry
+        is_usdt_quoted = (
+            sym.endswith("USDT")
+            or str(pos.get("quote_asset", "")).upper() in ("USDT", "USD")
+        )
+        multiplier = usdttmn if is_usdt_quoted else Decimal("1")
 
-    total_equity = to_decimal(cash) + open_val
-    mtm_pnl = open_val - cost_basis
+        open_val_tmn += (qty * bid) * multiplier
+        cost_basis_tmn += (qty * entry) * multiplier
+
+    total_equity = to_decimal(cash) + open_val_tmn
+    mtm_pnl = open_val_tmn - cost_basis_tmn
     return (total_equity, mtm_pnl)

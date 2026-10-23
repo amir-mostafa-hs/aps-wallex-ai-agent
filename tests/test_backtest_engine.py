@@ -144,4 +144,12 @@ def test_dashboard_backtest_endpoint_with_trend_filtered_pullback():
     assert "net_pnl_tmn" in data
     assert "total_fees_tmn" in data
     assert "trades" in data
+    assert "equity_curve" in data
+    assert len(data["equity_curve"]) > 0
+    for pt in data["equity_curve"]:
+        assert "timestamp" in pt
+        assert "total_equity" in pt
+        assert "equity_tmn" in pt
+        assert pt["total_equity"] == pt["equity_tmn"]
+
 

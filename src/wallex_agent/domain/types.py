@@ -182,3 +182,31 @@ class TradeRecord(TypedDict):
     exit_reason: str
     loss_cause: Literal["confirmed", "likely", "unknown"] | None
     post_mortem_notes: str | None
+
+
+class BacktestEquityPoint(TypedDict):
+    timestamp: float
+    total_equity: float
+    equity_tmn: float
+
+
+class BacktestRunResult(TypedDict):
+    run_id: str
+    symbol: str
+    strategy_id: str
+    initial_capital_tmn: float
+    final_equity_tmn: float
+    gross_pnl_tmn: float
+    total_fees_tmn: float
+    net_pnl_tmn: float
+    roi_pct: float
+    win_rate_pct: float
+    total_trades: int
+    max_drawdown_pct: float
+    stop_distance_pct: float
+    take_profit_distance_pct: float
+    max_holding_minutes: int
+    trades: Sequence[Mapping[str, Any]]
+    equity_curve: Sequence[BacktestEquityPoint]
+    summary: Mapping[str, Any]
+

@@ -5,9 +5,9 @@
 
 **Blocked by:** 24: مرزبندی قطعی حالت‌های اجرا و گارانتی عدم ارسال سفارش واقعی در Shadow
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] تعریف و یکپارچه‌سازی قرارداد جامع `BacktestRunResult` در `domain/types.py` و `accounting.py`
-- [ ] افزودن قابلیت تبدیل شفاف ارزهای کوت‌شده با USDT به TMN بر مبنای نرخ واقعی USDTTMN
-- [ ] استانداردسازی نقاط منحنی دارایی با هر دو کلید `total_equity` و `equity_tmn` جهت حفظ سازگاری
-- [ ] آزمون‌های واحد تبدیل ارزی، گزارش نتایج، و صحت محاسبات چندارزی در `tests/test_accounting.py`
+- [x] تعریف و یکپارچه‌سازی قرارداد جامع `BacktestRunResult` در `domain/types.py` و `accounting.py`
+- [x] افزودن قابلیت تبدیل شفاف ارزهای کوت‌شده با USDT به TMN بر مبنای نرخ واقعی USDTTMN
+- [x] استانداردسازی نقاط منحنی دارایی با هر دو کلید `total_equity` و `equity_tmn` جهت حفظ سازگاری
+- [x] آزمون‌های واحد تبدیل ارزی، گزارش نتایج، و صحت محاسبات چندارزی در `tests/test_accounting.py`

@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import TypedDict, Sequence, Mapping, Any, Callable
-from wallex_agent.domain.types import Candle, PositionRecord
+from wallex_agent.domain.types import Candle, PositionRecord, BacktestRunResult, BacktestEquityPoint
 from wallex_agent.domain.accounting import (
     to_decimal,
     quantize_qty,
@@ -68,27 +68,6 @@ def fetch_or_generate_historical_candles(
             "volume": 3.0 if (i % 30 != 25) else 10.5,
         })
     return candles
-
-
-class BacktestRunResult(TypedDict):
-    run_id: str
-    symbol: str
-    strategy_id: str
-    initial_capital_tmn: float
-    final_equity_tmn: float
-    gross_pnl_tmn: float
-    total_fees_tmn: float
-    net_pnl_tmn: float
-    roi_pct: float
-    win_rate_pct: float
-    total_trades: int
-    max_drawdown_pct: float
-    stop_distance_pct: float
-    take_profit_distance_pct: float
-    max_holding_minutes: int
-    trades: Sequence[Mapping[str, Any]]
-    equity_curve: Sequence[Mapping[str, Any]]
-    summary: Mapping[str, Any]
 
 
 class HistoricalBacktestEngine:
@@ -251,7 +230,15 @@ class HistoricalBacktestEngine:
 
             equity_points.append({
                 "timestamp": current_time,
+                "total_equity": float(step_equity),
                 "equity_tmn": float(step_equity),
+            })
+
+        if not equity_points:
+            equity_points.append({
+                "timestamp": time.time(),
+                "total_equity": float(self.initial_capital_tmn),
+                "equity_tmn": float(self.initial_capital_tmn),
             })
 
         # 3. Liquidate any leftover open position at final candle close

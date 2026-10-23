@@ -104,3 +104,74 @@ def test_calculate_mtm_equity_decimal():
     total_equity, unrealized_pnl = calculate_mtm_equity_decimal(cash, positions, current_bids)
     assert total_equity == Decimal("4920000")
     assert unrealized_pnl == Decimal("20000")
+
+
+def test_convert_quote_to_tmn_identity_for_tmn():
+    from wallex_agent.domain.accounting import convert_quote_to_tmn
+    assert convert_quote_to_tmn(1000000, "TMN") == Decimal("1000000")
+    assert convert_quote_to_tmn("5000", "tmn") == Decimal("5000")
+    assert convert_quote_to_tmn(1500, "IRT") == Decimal("1500")
+
+
+def test_convert_quote_to_tmn_for_usdt_with_real_rate():
+    from wallex_agent.domain.accounting import convert_quote_to_tmn
+    # 10 USDT at 272,800 TMN/USDT = 2,728,000 TMN
+    assert convert_quote_to_tmn(10, "USDT", usdttmn_rate="272800") == Decimal("2728000")
+    assert convert_quote_to_tmn("1.5", "usdt", usdttmn_rate="272000") == Decimal("408000.0")
+
+    # Invalid rate raises ValueError
+    with pytest.raises(ValueError, match="Invalid USDTTMN rate"):
+        convert_quote_to_tmn(10, "USDT", usdttmn_rate=0)
+    with pytest.raises(ValueError, match="Invalid USDTTMN rate"):
+        convert_quote_to_tmn(10, "USDT", usdttmn_rate="-100")
+
+
+def test_compute_trade_pnl_with_usdt_quote_converts_to_tmn():
+    from wallex_agent.domain.accounting import compute_trade_pnl
+    # BTCUSDT trade: entry 65,000 USDT, exit 66,300 USDT (+2%), qty 0.01 BTC
+    # Gross P&L in USDT = (66,300 - 65,000) * 0.01 = 13.0 USDT
+    financials = compute_trade_pnl(
+        entry_price=65000,
+        exit_price=66300,
+        quantity=0.01,
+        entry_fee=1.625,
+        exit_fee=1.6575,
+        quote_asset="USDT",
+        usdttmn_rate=272800,
+    )
+    assert financials["gross_pnl"] == Decimal("13.00")
+    assert financials["total_fee"] == Decimal("3.2825")
+    assert financials["net_pnl"] == Decimal("9.7175")
+
+    # Check converted TMN fields
+    assert financials["gross_pnl_tmn"] == Decimal("13.00") * Decimal("272800")
+    assert financials["total_fee_tmn"] == Decimal("3.2825") * Decimal("272800")
+    assert financials["net_pnl_tmn"] == Decimal("9.7175") * Decimal("272800")
+
+
+def test_calculate_mtm_equity_decimal_with_usdt_position():
+    from wallex_agent.domain.accounting import calculate_mtm_equity_decimal
+    cash = Decimal("5000000")
+    positions = {
+        "pos-usdt": {
+            "symbol": "BTCUSDT",
+            "quantity": Decimal("0.01"),
+            "entry_price": Decimal("65000"),  # 650 USDT cost basis
+            "is_open": True,
+        }
+    }
+    current_bids = {"BTCUSDT": Decimal("66000")}  # 660 USDT value (+10 USDT unrealized)
+    rate = Decimal("270000")  # 270,000 TMN per USDT
+
+    total_equity, unrealized_pnl = calculate_mtm_equity_decimal(
+        cash=cash,
+        positions=positions,
+        current_bids=current_bids,
+        usdttmn_rate=rate,
+    )
+    # Open value in TMN = 660 * 270,000 = 178,200,000 TMN
+    # Total equity = 5,000,000 + 178,200,000 = 183,200,000 TMN
+    assert total_equity == Decimal("183200000")
+    # Unrealized P&L in TMN = 10 * 270,000 = 2,700,000 TMN
+    assert unrealized_pnl == Decimal("2700000")
+
