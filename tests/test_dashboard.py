@@ -257,3 +257,26 @@ def test_render_equity_svg_prevents_nan_and_handles_flat_or_malformed_data():
     assert "NaN" not in svg_malformed
 
 
+def test_dashboard_serves_local_vazirmatn_fonts(client: TestClient):
+    # Verify local static font is served without CDN
+    res = client.get("/static/fonts/Vazirmatn-Regular.woff2")
+    assert res.status_code == 200
+    assert len(res.content) > 10000
+    # Also check HTML declares local @font-face
+    html_res = client.get("/")
+    assert "@font-face" in html_res.text
+    assert "Vazirmatn-Regular.woff2" in html_res.text
+
+
+def test_dashboard_config_settings_endpoint(client: TestClient):
+    headers = {"Authorization": "Bearer super-secret-token"}
+    res = client.get("/api/config/settings", headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert "default_strategy_id" in data
+    assert "default_stop_distance_pct" in data
+    assert "default_take_profit_distance_pct" in data
+    assert "risk_per_trade_equity_pct" in data
+
+
+

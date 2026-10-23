@@ -22,6 +22,20 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wallex Opportunity Agent - پنل مدیریت و مانیتورینگ</title>
     <style>
+        @font-face {
+            font-family: 'Vazirmatn';
+            src: url('/static/fonts/Vazirmatn-Regular.woff2') format('woff2');
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'Vazirmatn';
+            src: url('/static/fonts/Vazirmatn-Bold.woff2') format('woff2');
+            font-weight: 700;
+            font-style: normal;
+            font-display: swap;
+        }
         :root {
             --bg: #0b1120;
             --card-bg: #1e293b;
@@ -35,7 +49,7 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
         }
         * { box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Vazirmatn", "Segoe UI", Roboto, sans-serif;
+            font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             margin: 0; padding: 20px; background: var(--bg); color: var(--text-main); line-height: 1.5;
         }
         .header {
@@ -585,6 +599,13 @@ def create_dashboard_app(harness: SystemTradingHarness, auth_token: str = "super
     """Creates a FastAPI dashboard application bound to a SystemTradingHarness instance."""
     app = FastAPI(title="Wallex Opportunity Agent Dashboard")
 
+    from pathlib import Path
+    from fastapi.staticfiles import StaticFiles
+
+    static_dir = Path(__file__).parent / "static"
+    if static_dir.exists():
+        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
     def verify_auth(
         authorization: str | None = Header(default=None),
         x_api_key: str | None = Header(default=None),
@@ -748,6 +769,24 @@ def create_dashboard_app(harness: SystemTradingHarness, auth_token: str = "super
         gate = PreflightGate(cfg)
         report = gate.run_all_checks()
         return report
+
+    @app.get("/api/config/settings")
+    def get_config_settings(_auth: bool = Depends(verify_auth)):
+        """Returns unified strategy and risk configuration settings."""
+        cfg = load_config()
+        from wallex_agent.config import DEFAULT_STRATEGY_SETTINGS
+        settings = dict(DEFAULT_STRATEGY_SETTINGS)
+        settings.update({
+            "mode": cfg["mode"],
+            "risk_per_trade_equity_pct": cfg["risk_per_trade_equity_pct"],
+            "max_position_notional_equity_pct": cfg["max_position_notional_equity_pct"],
+            "max_total_exposure_equity_pct": cfg["max_total_exposure_equity_pct"],
+            "min_cash_reserve_equity_pct": cfg["min_cash_reserve_equity_pct"],
+            "max_open_positions": cfg["max_open_positions"],
+            "default_min_notional_tmn": cfg["default_min_notional_tmn"],
+            "liquidation_floor_tmn": cfg["liquidation_floor_tmn"],
+        })
+        return settings
 
     return app
 

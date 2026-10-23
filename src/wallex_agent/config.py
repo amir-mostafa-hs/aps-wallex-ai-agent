@@ -95,3 +95,13 @@ def load_config(env: Mapping[str, str] | None = None) -> AppConfig:
         "warning_limit_tmn": float(source.get("WARNING_LIMIT_TMN", "1000.0")),
         "sqlite_db_path": source.get("SQLITE_DB_PATH", "wallex_agent.db").strip(),
     }
+
+
+DEFAULT_STRATEGY_SETTINGS: dict[str, Any] = {
+    "default_strategy_id": "trend_filtered_pullback",
+    "default_stop_distance_pct": 1.0,
+    "default_take_profit_distance_pct": 2.0,
+    "default_max_holding_minutes": 10,
+    "default_cycles": 50,
+}
+
