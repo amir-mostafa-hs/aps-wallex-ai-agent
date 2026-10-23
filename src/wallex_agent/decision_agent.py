@@ -7,6 +7,7 @@ import httpx
 from typing import Any, Mapping
 from wallex_agent.domain.types import TradeIntent
 from wallex_agent.domain.validation import validate_trade_intent, ValidationError
+from wallex_agent.strategies.trend_filtered_pullback import evaluate_pullback_setup
 
 SYSTEM_PROMPT_VERSION = "1.0.0"
 
@@ -19,7 +20,7 @@ Rules:
    - BUY: Enter a new Spot buy position on an approved candidate.
    - HOLD: Maintain an existing position without modifying orders.
    - EXIT: Propose orderly closing of the full existing position.
-3. Allowed strategies: momentum, trend_following, mean_reversion.
+3. Allowed strategies: momentum, trend_following, mean_reversion, trend_filtered_pullback.
 4. Allowed horizon profiles: FAST (1-5m), INTRADAY_SHORT (5-30m), INTRADAY (30-120m).
 5. For BUY, you must provide positive stop_distance_pct, invalidation_condition, and evidence_ids from the given context.
 6. Never invent or hallucinate evidence_ids that were not provided in the input context.
@@ -34,7 +35,7 @@ TRADE_INTENT_JSON_SCHEMA = {
         "cycle_id": {"type": "string"},
         "symbol": {"type": "string"},
         "action": {"type": "string", "enum": ["NO_TRADE", "BUY", "HOLD", "EXIT"]},
-        "strategy_id": {"type": ["string", "null"], "enum": ["momentum", "trend_following", "mean_reversion", None]},
+        "strategy_id": {"type": ["string", "null"], "enum": ["momentum", "trend_following", "mean_reversion", "trend_filtered_pullback", None]},
         "horizon_profile": {"type": ["string", "null"], "enum": ["FAST", "INTRADAY_SHORT", "INTRADAY", None]},
         "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
         "reason_code": {
@@ -136,10 +137,10 @@ class DecisionAgent:
         self,
         llm_client: Any = None,
         heuristic_mode: bool = False,
-        default_strategy: str = "momentum",
+        default_strategy: str = "trend_filtered_pullback",
         default_stop_pct: float = 1.0,
         default_take_profit_pct: float = 2.0,
-        default_max_holding_minutes: int = 5,
+        default_max_holding_minutes: int = 10,
     ) -> None:
         if llm_client is None and not heuristic_mode:
             llm_key = os.getenv("LLM_API_KEY", "").strip()
@@ -169,13 +170,36 @@ class DecisionAgent:
 
         if self.llm_client is None:
             if self.heuristic_mode:
+                strat = self.default_strategy
+
+                # If full candle history is provided in context, run quantitative strategy logic
+                candles_ctx = context.get("candles")
+                candles_1m = None
+                if isinstance(candles_ctx, dict) and "1" in candles_ctx:
+                    candles_1m = candles_ctx["1"]
+                elif isinstance(candles_ctx, list):
+                    candles_1m = candles_ctx
+                elif "candles_1m" in context:
+                    candles_1m = context["candles_1m"]
+
+                if strat == "trend_filtered_pullback" and candles_1m:
+                    spread_bps = float(context.get("spread_bps", 15.0))
+                    return evaluate_pullback_setup(
+                        candles_1m=candles_1m,
+                        spread_bps=spread_bps,
+                        has_open_position=has_open_position,
+                        symbol=symbol,
+                        cycle_id=cycle_id,
+                        decision_id=decision_id,
+                        evidence_ids=evidence_ids,
+                    )
+
                 features = context.get("features", {})
                 ret = float(features.get("return_pct", 0.0))
                 rvol = float(features.get("relative_volume", 0.0))
 
                 should_buy = False
                 rationale = ""
-                strat = self.default_strategy
 
                 if strat == "trend_following":
                     if ret >= 0.05 and not has_open_position:
@@ -185,6 +209,10 @@ class DecisionAgent:
                     if ret < 0.0 and not has_open_position:
                         should_buy = True
                         rationale = f"Mean reversion bounce trigger (ret={ret:.2f}%)"
+                elif strat == "trend_filtered_pullback":
+                    if ret >= 0.05 and not has_open_position:
+                        should_buy = True
+                        rationale = f"Trend filtered pullback heuristic trigger (ret={ret:.2f}%)"
                 else:  # momentum
                     strat = "momentum"
                     if ret > 0.0 and rvol >= 1.0 and not has_open_position:

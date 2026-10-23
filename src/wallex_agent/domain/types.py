@@ -7,7 +7,7 @@ from typing import TypedDict, Literal, NotRequired, Sequence, Mapping, Any
 
 # Canonical Enums as Literals
 Action = Literal["NO_TRADE", "BUY", "HOLD", "EXIT"]
-StrategyId = Literal["momentum", "trend_following", "mean_reversion"]
+StrategyId = Literal["momentum", "trend_following", "mean_reversion", "trend_filtered_pullback"]
 HorizonProfile = Literal["FAST", "INTRADAY_SHORT", "INTRADAY"]
 ReasonCode = Literal[
     "EDGE_INSUFFICIENT",

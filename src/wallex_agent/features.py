@@ -140,3 +140,33 @@ def compute_technical_features(candles: Sequence[Candle]) -> dict[str, float]:
         "latest_close": closes[-1],
         "latest_volume": volumes[-1],
     }
+
+
+def calculate_ema(values: Sequence[float], period: int) -> list[float]:
+    """Calculates Exponential Moving Average (EMA) preserving length with leading SMA padding."""
+    if not values:
+        return []
+    if period <= 1 or len(values) < period:
+        sma = sum(values) / len(values)
+        return [sma] * len(values)
+
+    k = 2.0 / (period + 1.0)
+    # Seed with initial simple moving average
+    seed = sum(values[:period]) / float(period)
+    ema_tail = [seed]
+    for val in values[period:]:
+        ema_tail.append(val * k + ema_tail[-1] * (1.0 - k))
+
+    padding = [seed] * (period - 1)
+    return padding + ema_tail
+
+
+def calculate_vwap(candles: Sequence[Candle]) -> float:
+    """Calculates Volume Weighted Average Price (VWAP) across the given candle window."""
+    if not candles:
+        return 0.0
+    total_vol = sum(c["volume"] for c in candles)
+    if total_vol <= 0:
+        return candles[-1]["close"]
+    cum_pv = sum(((c["high"] + c["low"] + c["close"]) / 3.0) * c["volume"] for c in candles)
+    return cum_pv / total_vol

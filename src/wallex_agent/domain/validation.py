@@ -24,7 +24,7 @@ class ValidationError(ValueError):
 
 
 VALID_ACTIONS: Set[str] = {"NO_TRADE", "BUY", "HOLD", "EXIT"}
-VALID_STRATEGIES: Set[str] = {"momentum", "trend_following", "mean_reversion"}
+VALID_STRATEGIES: Set[str] = {"momentum", "trend_following", "mean_reversion", "trend_filtered_pullback"}
 VALID_HORIZONS: Set[str] = {"FAST", "INTRADAY_SHORT", "INTRADAY"}
 VALID_REASONS: Set[str] = {
     "EDGE_INSUFFICIENT",
