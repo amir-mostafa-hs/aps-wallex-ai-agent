@@ -61,28 +61,39 @@ def run_backtest_cmd(args: argparse.Namespace) -> int:
     """Executes multi-scenario historical backtest and prints performance report."""
     dotenv.load_dotenv()
     cycles_to_run = getattr(args, "cycles", 50)
+    strategy = getattr(args, "strategy", "trend_filtered_pullback")
     print("=" * 60)
-    print(f" RUNNING BACKTEST SIMULATION ({cycles_to_run} CYCLES)")
+    print(f" RUNNING HISTORICAL BACKTEST ({cycles_to_run} CYCLES, STRATEGY: {strategy})")
     print("=" * 60)
 
-    result = run_simulation_backtest(cycles=cycles_to_run)
+    if strategy == "trend_filtered_pullback":
+        from wallex_agent.backtest_engine import HistoricalBacktestEngine, fetch_or_generate_historical_candles
+        candles = fetch_or_generate_historical_candles(symbol="BTCTMN", count=max(cycles_to_run * 3, 150))
+        engine = HistoricalBacktestEngine(initial_capital_tmn=5000000.0)
+        result = engine.run(symbol="BTCTMN", candles_1m=candles, strategy_id=strategy)
+    else:
+        result = run_simulation_backtest(cycles=cycles_to_run, strategy_id=strategy)
+
     summary = result["summary"]
     init_cash = result["initial_capital_tmn"]
     final_equity = result["final_equity_tmn"]
+    gross_pnl = result.get("gross_pnl_tmn", 0.0)
+    total_fees = result.get("total_fees_tmn", 0.0)
     net_pnl = result["net_pnl_tmn"]
     roi_pct = result["roi_pct"]
 
     print("\n" + "=" * 60)
-    print(" BACKTEST PERFORMANCE REPORT")
+    print(f" BACKTEST PERFORMANCE REPORT (RUN ID: {result.get('run_id', 'N/A')})")
     print("=" * 60)
     print(f"Initial Capital:      {init_cash:>15,.0f} TMN")
     print(f"Final Equity:         {final_equity:>15,.0f} TMN")
+    print(f"Gross P&L:            {gross_pnl:>15,.0f} TMN")
+    print(f"Total Fees Paid:      {total_fees:>15,.0f} TMN")
     print(f"Net Realized P&L:     {net_pnl:>15,.0f} TMN ({roi_pct:+.2f}%)")
     print(f"Total Closed Trades:  {summary['total_trades']:>15}")
     print(f"Winning Trades:       {summary['winning_trades']:>15}")
     print(f"Losing Trades:        {summary['losing_trades']:>15}")
     print(f"Win Rate:             {summary['win_rate_pct']:>14.1f}%")
-    print(f"Total Fees Paid:      {summary['total_fees_tmn']:>15,.0f} TMN")
     print(f"Max Drawdown:         {summary['max_drawdown_pct']:>14.2f}%")
     print("=" * 60)
     return 0
@@ -276,6 +287,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # backtest
     bt_parser = subparsers.add_parser("backtest", help="Run historical backtest simulation")
     bt_parser.add_argument("--cycles", type=int, default=50, help="Number of simulation cycles")
+    bt_parser.add_argument("--strategy", type=str, default="trend_filtered_pullback", help="Strategy to test")
 
     # report
     subparsers.add_parser("report", help="Print audit and performance report from SQLite database")
