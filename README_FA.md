@@ -4,28 +4,25 @@
 
 > این بسته، مشخصات و برنامه پیاده‌سازی است؛ سودآوری استراتژی را تضمین نمی‌کند. مقادیر اولیه ریسک در `docs/ARCHITECTURE_FA.md` فقط نقطه شروع محافظه‌کارانه برای آزمایش‌اند و باید قبل از معاملات واقعی تأیید شوند.
 
-## فایل‌ها
+## فایل‌ها و ساختار مخزن
 
-- `docs/DECISION_REGISTER_FA.md` — تمام تصمیم‌های قطعی Grill-me و جدول امتیازدهی
-- `docs/GRILL_ME_HISTORY_FA.md` — تاریخچه گام‌به‌گام Grill-me و منطق انتخاب گزینه‌ها
-- `docs/AGENT_CONTRACT_FA.md` — منبع یگانه قرارداد ورودی/خروجی Agent، actionها و افق نگهداری
-- `docs/SOURCE_REVIEW_FA.md` — بازبینی فایل‌به‌فایل/صفحه‌به‌صفحه منابع اصلی و تعارض‌های واقعی
-- `docs/SOURCE_MATERIALS_AND_GAPS_FA.md` — منابع، وضعیت تأیید و شکاف‌های باقی‌مانده
-- `docs/RELATED_OPEN_SOURCE_REFERENCES_FA.md` — پروژه‌های متن‌باز و منابع LangChain/AI Hero
-- `docs/CHANGELOG_AUDIT_FA.md` — گزارش کنترل سازگاری و تغییرات این نسخه
-- `docs/PACKAGE_AUDIT_FA.md` — دامنه ممیزی و محدودیت‌های بسته
-- `docs/SPEC_FA.md` — صورت نیازمندی محصول، معیارهای پذیرش و محدوده نسخه اول
-- `docs/ARCHITECTURE_FA.md` — معماری پیشنهادی، LangChain و مرز مسئولیت Agent / Risk / Execution
-- `docs/MARKET_SCANNING_DECISION_LOGIC_FA.md` — cadence اسکن، دریافت/ساخت کندل، featureها و مسیر دقیق تصمیم ورود
-- `docs/TODO_48H_FA.md` — برنامه اولویت‌بندی‌شده برای ۴۸ ساعت توسعه
-- `docs/TESTING_REPORTING_FA.md` — بک‌تست، شدو تست، راه‌اندازی طولانی‌مدت و گزارش
-- `docs/CODING_AGENT_WORKFLOW_FA.md` — گردش‌کار Codex / Antigravity و مهارت‌های Matt Pocock
-- `prompts/AGENT_KICKOFF_FA.md` — پرامپت آماده شروع کار با Coding Agent
+- `docs/specs/DECISION_REGISTER_FA.md` — تمام تصمیم‌های قطعی Grill-me و جدول امتیازدهی
+- `docs/specs/GRILL_ME_HISTORY_FA.md` — تاریخچه گام‌به‌گام Grill-me و منطق انتخاب گزینه‌ها
+- `docs/specs/AGENT_CONTRACT_FA.md` — منبع یگانه قرارداد ورودی/خروجی Agent، actionها و افق نگهداری
+- `docs/specs/SPEC_FA.md` — صورت نیازمندی محصول، معیارهای پذیرش و محدوده نسخه اول
+- `docs/specs/ARCHITECTURE_FA.md` — معماری پیشنهادی، LangChain و مرز مسئولیت Agent / Risk / Execution
+- `docs/specs/MARKET_SCANNING_DECISION_LOGIC_FA.md` — cadence اسکن، دریافت/ساخت کندل، featureها و مسیر دقیق تصمیم ورود
+- `docs/specs/TODO_48H_FA.md` — برنامه اولویت‌بندی‌شده برای ۴۸ ساعت توسعه
+- `docs/specs/TESTING_REPORTING_FA.md` — بک‌تست، شدو تست، راه‌اندازی طولانی‌مدت و گزارش
+- `docs/specs/WALLEX_API_NOTES.md` — endpoint inventory و Spike checklist
+- `docs/specs/CODING_AGENT_WORKFLOW_FA.md` — گردش‌کار Codex / Antigravity و مهارت‌های Matt Pocock
+- `docs/specs/PACKAGE_CONTENTS_FA.md` — فهرست کامل محتویات بسته
+- `docs/agents/` — پیکربندی مهارت‌های مهندسی Matt Pocock (ردیاب تسک، برچسب‌های تریاژ و مستندات دامنه)
+- `docs/prompts/AGENT_KICKOFF_FA.md` — پرامپت آماده شروع کار با Coding Agent
+- `docs/reports/FINAL_REPORT_TEMPLATE.md` — قالب گزارش معامله
+- `docs/sources/` — منابع اولیه هکاتون (`assets.md`، `task.md`، `intro-text.md` و denylist بازارهای غیرفعال `inactive_markets.json`)
+- `docs/media/` — رسانه‌های ویدیویی و صوتی معرفی هکاتون
 - `.env.example` — فهرست تنظیمات و نام Secretها؛ هیچ کلید واقعی در آن قرار ندهید.
-- `reports/` — محل خروجی گزارش‌ها و شواهد اجرا
-- `source_materials/README_FA.md` — راهنمای چهار منبع اصلی و خروجی denylist مشتق‌شده
-- `PACKAGE_CONTENTS_FA.md` — فهرست کامل محتویات بسته
-- `scripts/verify_source_materials.py` — بررسی محلی hashهای منبع و denylist، بدون دسترسی شبکه
 
 ## تصمیم‌های تثبیت‌شده
 
@@ -45,14 +42,14 @@
 ## مسیر سریع شروع
 
 1. این پوشه را داخل مخزن پروژه قرار دهید یا محتوای آن را به مخزن جدید منتقل کنید.
-2. قبل از پیاده‌سازی، `docs/DECISION_REGISTER_FA.md`, `docs/AGENT_CONTRACT_FA.md`, `docs/SOURCE_MATERIALS_AND_GAPS_FA.md`, `docs/SPEC_FA.md` و `docs/ARCHITECTURE_FA.md` را به Coding Agent بدهید.
-3. ابتدا `docs/MARKET_SCANNING_DECISION_LOGIC_FA.md` را بخوانید؛ تفاوت cadence اسکن با timeframe کندل و AI review interval را رعایت کنید.
+2. قبل از پیاده‌سازی، `docs/specs/DECISION_REGISTER_FA.md`, `docs/specs/AGENT_CONTRACT_FA.md`, `docs/specs/SPEC_FA.md` و `docs/specs/ARCHITECTURE_FA.md` را به Coding Agent بدهید.
+3. ابتدا `docs/specs/MARKET_SCANNING_DECISION_LOGIC_FA.md` را بخوانید؛ تفاوت cadence اسکن با timeframe کندل و AI review interval را رعایت کنید.
 4. ابتدا فقط یک vertical slice بسازید: دریافت بازارها و موجودی → تولید یک Candidate → LangChain تصمیم ساختاریافته → Risk Engine → ثبت در SQLite → Shadow Order → گزارش نتیجه.
 5. پس از کارکردن مسیر عمودی، اجرای واقعی را با دروازه‌های سخت ایمنی فعال کنید. Live نیازمند `MODE=live`, `LIVE_TRADING_ENABLED=true`, `LIVE_PREFLIGHT_ACKNOWLEDGED=true` و تأیید preflight است؛ این تأیید یک‌باره است و سفارش‌های پس از آن خودکار اجرا می‌شوند.
 6. هیچ‌وقت API Key را در Git، لاگ، Screenshot یا پرامپت ذخیره نکنید.
-7. `docs/AGENT_CONTRACT_FA.md` مرجع action و horizon است؛ در صورت اختلاف با مثال‌های قدیمی‌تر، این قرارداد و سپس SPEC اصلاح‌شده ملاک است.
+7. `docs/specs/AGENT_CONTRACT_FA.md` مرجع action و horizon است؛ در صورت اختلاف با مثال‌های قدیمی‌تر، این قرارداد و سپس SPEC اصلاح‌شده ملاک است.
 8. LangChain لایه Agent است؛ هیچ Pydantic model در کد دامنه تعریف نشود. وجود Pydantic به‌عنوان dependency ترانزیتی به‌تنهایی خطا نیست.
-9. چهار منبع اصلی در `source_materials/originals/` داخل همین ZIP حفظ شده‌اند؛ `assets.md` به‌صورت اصلی و در کنار denylist مشتق‌شده (۳۴۵ جفت غیرفعال) موجود است. پیش از Live، فایل مشتق‌شده باید با API فعال Spot و capability واقعی حساب تطبیق داده شود. موارد تأییدنشده، از جمله کارمزد اعتبار سه‌روزه، threshold liquidation، و روش/زمان رسمی پایان مسابقه، در `docs/SOURCE_REVIEW_FA.md` ثبت شده‌اند.
+9. منابع اصلی در `docs/sources/` (`assets.md` و ...) و `docs/media/` حفظ شده‌اند؛ `docs/sources/assets.md` به‌صورت اصلی و در کنار denylist مشتق‌شده (۳۴۵ جفت غیرفعال در `docs/sources/inactive_markets.json`) موجود است. پیش از Live، فایل مشتق‌شده باید با API فعال Spot و capability واقعی حساب تطبیق داده شود. موارد تأییدنشده، از جمله کارمزد اعتبار سه‌روزه، threshold liquidation، و روش/زمان رسمی پایان مسابقه، در اسناد ثبت شده‌اند.
 
 ## منابع فنی مرجع
 
