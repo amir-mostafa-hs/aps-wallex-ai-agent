@@ -14,7 +14,7 @@ from wallex_agent.universe import MarketUniverse
 from wallex_agent.scanner import CandidateScanner, AICallBudget, ReviewPriorityQueue, ReviewItem
 from wallex_agent.decision_agent import DecisionAgent
 from wallex_agent.risk_engine import RiskEngine, PortfolioState
-from wallex_agent.executor import OrderExecutor
+from wallex_agent.executor import OrderExecutor, ShadowOrderExecutor
 from wallex_agent.watchdog import LocalWatchdog
 from wallex_agent.telemetry import TelemetryStore, calculate_trade_pnl, classify_loss_cause
 
@@ -128,7 +128,10 @@ class SystemTradingHarness:
         else:
             self.exchange_client = exchange_client
 
-        self.executor = OrderExecutor(exchange_client=self.exchange_client)
+        if self.mode in ("shadow", "backtest"):
+            self.executor = ShadowOrderExecutor()
+        else:
+            self.executor = OrderExecutor(exchange_client=self.exchange_client)
         self.portfolio: PortfolioState = {
             "total_equity_tmn": initial_cash_tmn,
             "available_cash_tmn": initial_cash_tmn,
