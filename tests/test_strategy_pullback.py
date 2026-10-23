@@ -117,3 +117,38 @@ def test_strategy_triggers_buy_on_confirmed_bullish_pullback():
 def test_decision_agent_uses_trend_filtered_pullback_by_default():
     agent = DecisionAgent(heuristic_mode=True)
     assert agent.default_strategy == "trend_filtered_pullback"
+
+
+def test_strategy_proportional_ema_on_short_5m_history():
+    # 50 1m candles = 10 5m candles; EMA fast and slow must not collapse to identical values
+    candles_1m = _generate_synthetic_candles(base_price=100000.0, trend_pct=0.15, count=46)
+    last_p = candles_1m[-1]["close"]
+    for i in range(3):
+        last_p *= 0.998
+        candles_1m.append({
+            "timestamp": candles_1m[-1]["timestamp"] + 60,
+            "open": last_p * 1.001,
+            "high": last_p * 1.002,
+            "low": last_p * 0.997,
+            "close": last_p,
+            "volume": 50.0,
+        })
+    last_p *= 1.005
+    candles_1m.append({
+        "timestamp": candles_1m[-1]["timestamp"] + 60,
+        "open": last_p * 0.996,
+        "high": last_p * 1.003,
+        "low": last_p * 0.995,
+        "close": last_p,
+        "volume": 150.0,
+    })
+
+    intent = evaluate_pullback_setup(
+        candles_1m=candles_1m,
+        spread_bps=10.0,
+        has_open_position=False,
+        symbol="BTCTMN",
+        cycle_id="c-short",
+    )
+    assert intent["action"] == "BUY"
+    assert intent["reason_code"] == "SIGNAL_VALID"

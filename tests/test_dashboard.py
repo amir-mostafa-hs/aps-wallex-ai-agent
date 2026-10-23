@@ -279,4 +279,28 @@ def test_dashboard_config_settings_endpoint(client: TestClient):
     assert "risk_per_trade_equity_pct" in data
 
 
+def test_dashboard_scroll_and_responsive_table_structure(client: TestClient):
+    res = client.get("/")
+    assert res.status_code == 200
+    html = res.text
+
+    # 1. html and body smooth vertical scrolling
+    assert "overflow-y: scroll" in html
+    assert "overflow-x: hidden" in html
+    assert "min-height: 100vh" in html
+
+    # 2. Sticky navigation tabs
+    assert "position: sticky" in html
+    assert "top: 0" in html
+
+    # 3. Responsive table wrappers to prevent horizontal overflow freezing
+    assert 'class="table-responsive" id="positionsContainer"' in html
+    assert 'class="table-responsive" id="btTradesTableContainer"' in html
+    assert 'class="table-responsive" id="auditTradesContainer"' in html
+    assert 'class="table-responsive" id="preflightResultContainer"' in html
+
+    # 4. Tab switch resets scroll position to top
+    assert "window.scrollTo({ top: 0, behavior: 'instant' })" in html
+
+
 

@@ -48,9 +48,35 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
             --accent-red: #ef4444;
         }
         * { box-sizing: border-box; }
+        html {
+            overflow-y: scroll;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+            height: 100%;
+        }
         body {
             font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            margin: 0; padding: 20px; background: var(--bg); color: var(--text-main); line-height: 1.5;
+            margin: 0;
+            padding: 20px 20px 100px 20px;
+            background: var(--bg);
+            color: var(--text-main);
+            line-height: 1.5;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b1120;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 5px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #0284c7;
         }
         .header {
             display: flex; justify-content: space-between; align-items: center;
@@ -62,7 +88,11 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
             background: #0f172a; border: 1px solid var(--card-border); color: #fff;
             padding: 8px 12px; border-radius: 6px; font-size: 0.9rem; width: 180px; direction: ltr;
         }
-        .nav-tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--card-border); padding-bottom: 8px; }
+        .nav-tabs {
+            display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--card-border);
+            padding: 10px 0; position: sticky; top: 0; z-index: 99;
+            background: rgba(11, 17, 32, 0.95); backdrop-filter: blur(8px);
+        }
         .tab-btn {
             background: transparent; border: 1px solid transparent; color: var(--text-muted);
             padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1rem;
@@ -95,7 +125,27 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
         .btn-resume { background: var(--accent-green); color: #fff; }
         .btn-flatten { background: var(--accent-red); color: #fff; }
         .btn-primary { background: #0284c7; color: #fff; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; direction: ltr; }
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin-top: 10px;
+        }
+        .table-responsive::-webkit-scrollbar {
+            height: 8px;
+        }
+        .table-responsive::-webkit-scrollbar-track {
+            background: #0f172a;
+            border-radius: 4px;
+        }
+        .table-responsive::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        .table-responsive::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; direction: ltr; min-width: 600px; }
         th, td { text-align: left; padding: 10px; border-bottom: 1px solid var(--card-border); font-size: 0.9rem; }
         th { color: var(--text-muted); background: #0f172a; }
         .status-pill { font-size: 0.8rem; padding: 2px 8px; border-radius: 4px; }
@@ -170,7 +220,7 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
 
         <div class="card">
             <h2>موقعیت‌های باز لحظه‌ای (Active Positions)</h2>
-            <div id="positionsContainer">{{POSITIONS_TABLE}}</div>
+            <div class="table-responsive" id="positionsContainer">{{POSITIONS_TABLE}}</div>
         </div>
     </div>
 
@@ -229,7 +279,7 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
             </div>
 
             <h3 style="margin-top: 20px; color: var(--primary);">ریز معاملات انجام‌شده در شبیه‌سازی</h3>
-            <div id="btTradesTableContainer"></div>
+            <div class="table-responsive" id="btTradesTableContainer"></div>
         </div>
     </div>
 
@@ -248,7 +298,7 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
             </div>
 
             <h3 style="margin-top: 24px; color: var(--primary);">تحلیل علت زیان معاملات (Loss Cause Post-Mortem)</h3>
-            <div id="auditTradesContainer" style="overflow-x: auto;"></div>
+            <div class="table-responsive" id="auditTradesContainer"></div>
         </div>
     </div>
 
@@ -258,7 +308,7 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
             <h2>آزمون ایمنی و مجوزهای پیش از اجرای زنده (Preflight Gate)</h2>
             <p style="color: var(--text-muted); font-size: 0.9rem;">اعتبارسنجی خودکار مجوز TRADE ساب‌اکانت اعتباری، دن‌لیست Fail-Closed، محدودیت حداقل ارزش سفارش، واچ‌داگ و انقضای پکیج</p>
             <button id="btnRunPreflight" class="action-btn btn-primary" onclick="runPreflightCheck()">اجرای تست جامع Preflight</button>
-            <div id="preflightResultContainer" style="margin-top: 20px;"></div>
+            <div class="table-responsive" id="preflightResultContainer" style="margin-top: 20px;"></div>
         </div>
     </div>
 
@@ -290,7 +340,10 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
             });
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             const targetContent = document.getElementById('tab-' + tabId);
-            if (targetContent) targetContent.classList.add('active');
+            if (targetContent) {
+                targetContent.classList.add('active');
+                window.scrollTo({ top: 0, behavior: 'instant' });
+            }
             if (tabId === 'reports') loadAuditReport();
         }
 
@@ -556,12 +609,14 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                     <p style="margin:0; font-size:0.9rem; line-height:1.6; color:#cbd5e1; direction:ltr; text-align:left; background:#1e293b; padding:10px; border-radius:6px; font-family:monospace; word-break:break-all;">${notes}</p>
                 </div>
             `;
+            document.body.style.overflow = 'hidden';
             document.getElementById('postMortemModal').classList.add('active');
         }
 
         function closePostMortemModal(e) {
             if (!e || e.target.id === 'postMortemModal' || e.target.classList.contains('modal-close')) {
                 document.getElementById('postMortemModal').classList.remove('active');
+                document.body.style.overflow = '';
             }
         }
 

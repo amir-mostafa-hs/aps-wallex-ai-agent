@@ -101,14 +101,15 @@ def evaluate_pullback_setup(
         c5_list = list(candles_5m)
 
     c5_closes = [c["close"] for c in c5_list]
-    # Calculate EMA20 and EMA50 on 5m candles
-    p_fast = min(20, len(c5_closes))
-    p_slow = min(50, len(c5_closes))
+    # Calculate EMA fast and slow on 5m candles proportionally so p_fast < p_slow
+    n_c5 = len(c5_closes)
+    p_slow = min(50, n_c5)
+    p_fast = min(20, max(3, p_slow // 2))
     ema20_5m = calculate_ema(c5_closes, p_fast)
     ema50_5m = calculate_ema(c5_closes, p_slow)
 
-    # Bullish condition: 5m EMA20 > EMA50
-    is_5m_bullish = (ema20_5m[-1] > ema50_5m[-1]) if len(c5_closes) >= 5 else False
+    # Bullish condition: 5m EMA fast > EMA slow
+    is_5m_bullish = (ema20_5m[-1] > ema50_5m[-1]) if n_c5 >= 5 else False
     if not is_5m_bullish:
         return {
             "contract_version": "1.0",

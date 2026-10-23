@@ -23,7 +23,7 @@ def fetch_or_generate_historical_candles(
     symbol: str = "BTCTMN",
     count: int = 200,
     base_url: str = "https://api.wallex.ir",
-    timeout: float = 1.0,
+    timeout: float = 5.0,
 ) -> list[Candle]:
     """Fetches real historical candles from Wallex UDF API, falling back to realistic synthetic candles if offline."""
     now = int(time.time())
@@ -198,7 +198,8 @@ class HistoricalBacktestEngine:
                     # Allocate fixed risk portion (e.g. 15% of current cash, min 100,000 TMN)
                     target_notional = min(cash * Decimal("0.20"), Decimal("1000000"))
                     if target_notional >= Decimal("100000") and cash >= target_notional:
-                        qty = quantize_qty(target_notional / entry_price, precision=6)
+                        precision = 8 if "BTC" in symbol else 4
+                        qty = quantize_qty(target_notional / entry_price, precision=precision)
                         entry_notional = qty * entry_price
                         entry_fee = entry_notional * fee_dec
 
