@@ -16,6 +16,7 @@ from wallex_agent.telemetry import TelemetryStore
 from wallex_agent.harness import SystemTradingHarness, run_simulation_backtest
 from wallex_agent.preflight import PreflightGate, PreflightReport
 from wallex_agent.dashboard import create_dashboard_app
+from wallex_agent.market_data_adapter import WallexMarketDataAdapter
 
 
 def run_preflight_cmd(args: argparse.Namespace) -> int:
@@ -141,6 +142,13 @@ def run_shadow_cmd(args: argparse.Namespace) -> int:
         print(f"[FAIL] Universe initialization failed: {e}")
         return 1
 
+    market_adapter = WallexMarketDataAdapter(base_url=config.get("wallex_base_url", "https://api.wallex.ir"))
+    try:
+        live_snapshots = market_adapter.refresh_all_markets()
+        initial_prices = {sym: snap["last_price"] for sym, snap in live_snapshots.items()}
+    except Exception as exc:
+        initial_prices = {}
+
     harness = SystemTradingHarness(
         mode="shadow",
         initial_cash_tmn=5000000.0,
@@ -153,7 +161,7 @@ def run_shadow_cmd(args: argparse.Namespace) -> int:
             liquidation_floor_tmn=config["liquidation_floor_tmn"],
         ),
         telemetry_store=telemetry,
-        initial_prices={"BTCTMN": 4500000000.0, "ETHTMN": 250000000.0, "USDTTMN": 70000.0},
+        initial_prices=initial_prices,
     )
 
     auth_token = (os.environ.get("DASHBOARD_ACCESS_TOKEN") or "").strip() or "super-secret-token"
@@ -179,34 +187,43 @@ def run_shadow_cmd(args: argparse.Namespace) -> int:
     # Trading cycle loop
     cycle_count = 0
     interval = config.get("scan_interval_seconds", 15.0)
-    base_market_defaults = {
-        "BTCTMN": 4500000000.0,
-        "ETHTMN": 250000000.0,
-        "SOLTMN": 12000000.0,
-        "USDTTMN": 70000.0,
-    }
 
     try:
         while True:
             cycle_count += 1
             now_ts = time.time()
-            # Feed dynamic multi-market snapshot for all eligible markets in universe
+            try:
+                live_snapshots = market_adapter.refresh_all_markets()
+            except Exception:
+                live_snapshots = {}
+
+            # Feed real live market snapshot for all eligible markets in universe
             snapshot = {}
             for sym in universe.allowed_symbols:
-                base_p = base_market_defaults.get(sym, 100000.0)
-                # Realistic price oscillation per market
-                drift = 1.0 + (0.001 * (((cycle_count + hash(sym)) % 7) - 3))
-                curr_p = base_p * drift
+                live_snap = live_snapshots.get(sym)
+                if live_snap:
+                    curr_p = live_snap["last_price"]
+                    spread_bps = live_snap["spread_bps"]
+                    ret_pct = live_snap["change_24h_pct"]
+                    vol = live_snap["volume_24h"]
+                    is_stale = live_snap["is_stale"]
+                else:
+                    curr_p = initial_prices.get(sym, 0.0)
+                    spread_bps = 50.0
+                    ret_pct = 0.0
+                    vol = 0.0
+                    is_stale = True
+
                 snapshot[sym] = {
                     "current_price": curr_p,
                     "features": {
-                        "return_pct": round(((drift - 1.0) * 100.0) + (0.2 * (cycle_count % 3)), 2),
-                        "relative_volume": round(1.2 + (0.2 * ((cycle_count + hash(sym)) % 4)), 2),
+                        "return_pct": ret_pct,
+                        "relative_volume": 1.2,
                         "volatility": 0.015,
-                        "latest_volume": 2000000.0,
+                        "latest_volume": vol,
                     },
-                    "spread_bps": 12.0,
-                    "is_stale": False,
+                    "spread_bps": spread_bps,
+                    "is_stale": is_stale,
                     "evidence_ids": [f"ev-{sym}-{cycle_count}"],
                     "quote_timestamp": now_ts,
                 }

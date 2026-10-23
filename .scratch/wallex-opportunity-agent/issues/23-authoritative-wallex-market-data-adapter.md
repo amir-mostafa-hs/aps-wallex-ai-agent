@@ -5,9 +5,9 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] پیاده‌سازی کلاس `WallexMarketDataAdapter` با قابلیت واکشی داده لحظه‌ای از اندپوینت‌های رسمی والکس
-- [ ] دریافت نرخ واقعی بازار `USDTTMN` (حدود ۲۷۲,۸۰۰ تومان) و حذف `base_market_defaults`
-- [ ] اعتبارسنجی تازگی داده و اعمال رفتار Fail-Closed در صورت قطعی شبکه به جای تولید دیتای مصنوعی
-- [ ] آزمون‌های واحد واکشی داده، استخراج اسپرد و نگاشت متادیتا در `tests/test_market_data_adapter.py`
+- [x] پیاده‌سازی کلاس `WallexMarketDataAdapter` با قابلیت واکشی داده لحظه‌ای از اندپوینت‌های رسمی والکس
+- [x] دریافت نرخ واقعی بازار `USDTTMN` (حدود ۲۷۲,۸۰۰ تومان) و حذف `base_market_defaults`
+- [x] اعتبارسنجی تازگی داده و اعمال رفتار Fail-Closed در صورت قطعی شبکه به جای تولید دیتای مصنوعی
+- [x] آزمون‌های واحد واکشی داده، استخراج اسپرد و نگاشت متادیتا در `tests/test_market_data_adapter.py`
