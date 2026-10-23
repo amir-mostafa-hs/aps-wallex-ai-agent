@@ -658,63 +658,46 @@ def create_dashboard_app(harness: SystemTradingHarness, auth_token: str = "super
     @app.post("/api/backtest/run")
     def run_backtest_endpoint(payload: dict[str, Any] = Body(default={}), _auth: bool = Depends(verify_auth)):
         """Executes a backtest simulation and returns performance statistics."""
-        cycles = int(payload.get("cycles", 50))
         strategy_id = str(payload.get("strategy_id", "trend_filtered_pullback")).strip()
-        stop_distance_pct = float(payload.get("stop_distance_pct", 1.0))
-        take_profit_distance_pct = float(payload.get("take_profit_distance_pct", 2.0))
-        max_holding_minutes = int(payload.get("max_holding_minutes", 10))
+        from wallex_agent.domain.validation import VALID_STRATEGIES
+        if strategy_id not in VALID_STRATEGIES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid strategy '{strategy_id}'. Must be one of: {sorted(list(VALID_STRATEGIES))}",
+            )
 
-        if strategy_id == "trend_filtered_pullback":
-            candles = fetch_or_generate_historical_candles(symbol="BTCTMN", count=max(cycles * 3, 120))
-            engine = HistoricalBacktestEngine(initial_capital_tmn=harness.initial_cash_tmn)
-            res = engine.run(
-                symbol="BTCTMN",
-                candles_1m=candles,
-                strategy_id=strategy_id,
-                stop_distance_pct=stop_distance_pct,
-                take_profit_distance_pct=take_profit_distance_pct,
-                max_holding_minutes=max_holding_minutes,
-            )
-            return {
-                "run_id": res["run_id"],
-                "initial_capital_tmn": res["initial_capital_tmn"],
-                "final_equity_tmn": res["final_equity_tmn"],
-                "gross_pnl_tmn": res["gross_pnl_tmn"],
-                "total_fees_tmn": res["total_fees_tmn"],
-                "net_pnl_tmn": res["net_pnl_tmn"],
-                "roi_pct": res["roi_pct"],
-                "strategy_id": res["strategy_id"],
-                "stop_distance_pct": res["stop_distance_pct"],
-                "take_profit_distance_pct": res["take_profit_distance_pct"],
-                "max_holding_minutes": res["max_holding_minutes"],
-                "summary": res["summary"],
-                "trades": res["trades"],
-                "equity_curve": res["equity_curve"],
-            }
-        else:
-            result = run_simulation_backtest(
-                cycles=cycles,
-                strategy_id=strategy_id,
-                stop_distance_pct=stop_distance_pct,
-                take_profit_distance_pct=take_profit_distance_pct,
-                max_holding_minutes=max_holding_minutes,
-            )
-            return {
-                "run_id": result["run_id"],
-                "initial_capital_tmn": result["initial_capital_tmn"],
-                "final_equity_tmn": result["final_equity_tmn"],
-                "gross_pnl_tmn": result["gross_pnl_tmn"],
-                "total_fees_tmn": result["total_fees_tmn"],
-                "net_pnl_tmn": result["net_pnl_tmn"],
-                "roi_pct": result["roi_pct"],
-                "strategy_id": result["strategy_id"],
-                "stop_distance_pct": result["stop_distance_pct"],
-                "take_profit_distance_pct": result["take_profit_distance_pct"],
-                "max_holding_minutes": result["max_holding_minutes"],
-                "summary": result["summary"],
-                "trades": result["trades"],
-                "equity_curve": result["equity_curve"],
-            }
+        cycles = max(10, min(500, int(payload.get("cycles", 50))))
+        stop_distance_pct = max(0.1, min(10.0, float(payload.get("stop_distance_pct", 1.0))))
+        take_profit_distance_pct = max(0.1, min(20.0, float(payload.get("take_profit_distance_pct", 2.0))))
+        max_holding_minutes = max(1, min(1440, int(payload.get("max_holding_minutes", 10))))
+        symbol = str(payload.get("symbol", "BTCTMN")).strip().upper()
+
+        candles = fetch_or_generate_historical_candles(symbol=symbol, count=max(cycles * 3, 120))
+        engine = HistoricalBacktestEngine(initial_capital_tmn=harness.initial_cash_tmn)
+        res = engine.run(
+            symbol=symbol,
+            candles_1m=candles,
+            strategy_id=strategy_id,
+            stop_distance_pct=stop_distance_pct,
+            take_profit_distance_pct=take_profit_distance_pct,
+            max_holding_minutes=max_holding_minutes,
+        )
+        return {
+            "run_id": res["run_id"],
+            "initial_capital_tmn": res["initial_capital_tmn"],
+            "final_equity_tmn": res["final_equity_tmn"],
+            "gross_pnl_tmn": res["gross_pnl_tmn"],
+            "total_fees_tmn": res["total_fees_tmn"],
+            "net_pnl_tmn": res["net_pnl_tmn"],
+            "roi_pct": res["roi_pct"],
+            "strategy_id": res["strategy_id"],
+            "stop_distance_pct": res["stop_distance_pct"],
+            "take_profit_distance_pct": res["take_profit_distance_pct"],
+            "max_holding_minutes": res["max_holding_minutes"],
+            "summary": res["summary"],
+            "trades": res["trades"],
+            "equity_curve": res["equity_curve"],
+        }
 
 
     @app.get("/api/reports/audit")

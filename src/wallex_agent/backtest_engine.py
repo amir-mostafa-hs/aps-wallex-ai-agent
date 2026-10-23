@@ -12,7 +12,7 @@ from wallex_agent.domain.accounting import (
     TradeFinancials,
 )
 from wallex_agent.watchdog import LocalWatchdog
-from wallex_agent.strategies.trend_filtered_pullback import evaluate_pullback_setup
+from wallex_agent.strategies import dispatch_strategy_setup
 from wallex_agent.telemetry import TelemetryStore
 import time
 import httpx
@@ -121,7 +121,7 @@ class HistoricalBacktestEngine:
                 pos_rec: PositionRecord = {
                     "position_id": position["position_id"],
                     "symbol": position["symbol"],
-                    "strategy_id": "trend_filtered_pullback",
+                    "strategy_id": strategy_id,
                     "quantity": float(position["quantity"]),
                     "entry_price": float(position["entry_price"]),
                     "current_price": float(curr_candle["close"]),
@@ -180,12 +180,16 @@ class HistoricalBacktestEngine:
 
             # 2. Evaluate entry setup on history_slice (strictly prior candles)
             if position is None:
-                intent = evaluate_pullback_setup(
+                intent = dispatch_strategy_setup(
+                    strategy_id=strategy_id,
                     candles_1m=history_slice,
                     spread_bps=spread_bps,
                     has_open_position=False,
                     symbol=symbol,
                     cycle_id=f"c-{i}",
+                    stop_distance_pct=stop_distance_pct,
+                    take_profit_distance_pct=take_profit_distance_pct,
+                    max_holding_minutes=max_holding_minutes,
                 )
 
                 if intent.get("action") == "BUY":

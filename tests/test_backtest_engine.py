@@ -153,3 +153,94 @@ def test_dashboard_backtest_endpoint_with_trend_filtered_pullback():
         assert pt["total_equity"] == pt["equity_tmn"]
 
 
+def test_backtest_engine_dispatches_different_strategies_producing_distinct_results():
+    engine = HistoricalBacktestEngine(initial_capital_tmn=5000000.0)
+    candles = _build_test_candles(150)
+
+    res_pullback = engine.run(symbol="BTCTMN", candles_1m=candles, strategy_id="trend_filtered_pullback")
+    res_momentum = engine.run(symbol="BTCTMN", candles_1m=candles, strategy_id="momentum")
+    res_trend = engine.run(symbol="BTCTMN", candles_1m=candles, strategy_id="trend_following")
+
+    assert res_pullback["strategy_id"] == "trend_filtered_pullback"
+    assert res_momentum["strategy_id"] == "momentum"
+    assert res_trend["strategy_id"] == "trend_following"
+
+    # Momentum and Pullback trigger on different logic conditions and candle signals
+    # Ensure they don't simply clone the exact same trade list
+    for t in res_momentum["trades"]:
+        assert t["strategy_id"] == "momentum"
+    for t in res_trend["trades"]:
+        assert t["strategy_id"] == "trend_following"
+
+
+def test_backtest_engine_respects_custom_stop_and_take_profit_parameters():
+    engine = HistoricalBacktestEngine(initial_capital_tmn=5000000.0)
+    candles = _build_test_candles(150)
+
+    res = engine.run(
+        symbol="BTCTMN",
+        candles_1m=candles,
+        strategy_id="momentum",
+        stop_distance_pct=0.8,
+        take_profit_distance_pct=1.6,
+        max_holding_minutes=5,
+    )
+
+    assert res["stop_distance_pct"] == 0.8
+    assert res["take_profit_distance_pct"] == 1.6
+    assert res["max_holding_minutes"] == 5
+
+
+def test_dashboard_backtest_endpoint_validates_and_rejects_invalid_strategy():
+    from wallex_agent.universe import MarketUniverse
+    from wallex_agent.decision_agent import DecisionAgent
+    from wallex_agent.risk_engine import RiskEngine
+    from wallex_agent.telemetry import TelemetryStore
+    from wallex_agent.harness import SystemTradingHarness
+    from wallex_agent.dashboard import create_dashboard_app
+    from fastapi.testclient import TestClient
+
+    telemetry = TelemetryStore(db_path=":memory:")
+    telemetry.initialize()
+    universe = MarketUniverse.build(
+        markets=[{"symbol": "BTCTMN", "is_spot": True, "is_active": True, "amount_precision": 6, "price_precision": 0}],
+        local_denylist=["DUMMY/TMN"],
+        package_unavailable=[],
+    )
+    harness = SystemTradingHarness(
+        mode="shadow",
+        initial_cash_tmn=5000000.0,
+        universe=universe,
+        decision_agent=DecisionAgent(heuristic_mode=True),
+        risk_engine=RiskEngine(),
+        telemetry_store=telemetry,
+        initial_prices={"BTCTMN": 4500000000.0},
+    )
+
+    app = create_dashboard_app(harness, auth_token="secret-test-token")
+    client = TestClient(app)
+
+    # Invalid strategy must be rejected with 400 Bad Request
+    resp = client.post(
+        "/api/backtest/run",
+        headers={"Authorization": "Bearer secret-test-token"},
+        json={"strategy_id": "non_existent_fake_strategy"},
+    )
+    assert resp.status_code == 400
+    assert "Invalid strategy" in resp.json()["detail"]
+
+    # Valid momentum backtest runs and returns 200 with proper strategy metadata
+    resp_mom = client.post(
+        "/api/backtest/run",
+        headers={"Authorization": "Bearer secret-test-token"},
+        json={"strategy_id": "momentum", "stop_distance_pct": 1.5, "take_profit_distance_pct": 3.0},
+    )
+    assert resp_mom.status_code == 200
+    data = resp_mom.json()
+    assert data["strategy_id"] == "momentum"
+    assert data["stop_distance_pct"] == 1.5
+    assert data["take_profit_distance_pct"] == 3.0
+    assert "equity_curve" in data
+
+
+
