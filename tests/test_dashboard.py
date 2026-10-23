@@ -208,3 +208,52 @@ def test_dashboard_preflight_endpoint(client: TestClient):
     assert "checks" in data
     assert "all_passed" in data
 
+
+def test_dashboard_html_contains_nan_safe_equity_chart(client: TestClient):
+    res = client.get("/")
+    assert res.status_code == 200
+    html = res.text
+    # Must contain safe fallback chain and isFinite check
+    assert "p.total_equity ?? p.equity_tmn ?? initialCapital" in html or "Number.isFinite" in html
+    assert "renderEquityChart" in html
+
+
+def test_render_equity_svg_prevents_nan_and_handles_flat_or_malformed_data():
+    from wallex_agent.dashboard import render_equity_svg
+
+    # 1. Empty points
+    svg_empty = render_equity_svg([], initial_capital=5000000.0)
+    assert "<svg" in svg_empty
+    assert "NaN" not in svg_empty
+
+    # 2. Single point
+    svg_single = render_equity_svg([{"timestamp": 1000, "equity_tmn": 5000000}], initial_capital=5000000.0)
+    assert "<svg" in svg_single
+    assert "NaN" not in svg_single
+
+    # 3. Flat state (all equal, zero variance)
+    svg_flat = render_equity_svg([
+        {"timestamp": 1000, "total_equity": 5000000.0},
+        {"timestamp": 1060, "total_equity": 5000000.0},
+    ], initial_capital=5000000.0)
+    assert "<svg" in svg_flat
+    assert "NaN" not in svg_flat
+    assert "5,000,000" in svg_flat
+
+    # 4. Legacy format containing only equity_tmn
+    svg_legacy = render_equity_svg([
+        {"timestamp": 1000, "equity_tmn": 5000000.0},
+        {"timestamp": 1060, "equity_tmn": 5100000.0},
+    ], initial_capital=5000000.0)
+    assert "<svg" in svg_legacy
+    assert "NaN" not in svg_legacy
+
+    # 5. Malformed points with None or non-numeric values
+    svg_malformed = render_equity_svg([
+        {"timestamp": 1000, "total_equity": None, "equity_tmn": "invalid"},
+        {"timestamp": 1060, "total_equity": 5050000.0},
+    ], initial_capital=5000000.0)
+    assert "<svg" in svg_malformed
+    assert "NaN" not in svg_malformed
+
+

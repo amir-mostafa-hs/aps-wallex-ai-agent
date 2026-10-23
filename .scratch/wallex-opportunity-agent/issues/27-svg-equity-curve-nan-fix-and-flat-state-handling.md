@@ -5,9 +5,9 @@
 
 **Blocked by:** 25: قرارداد یکپارچه BacktestRunResult، تبدیل امن کوت USDT به TMN و استانداردسازی حسابداری Decimal
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] استخراج ایمن مقادیر با استفاده از زنجیره fallback: `p.total_equity ?? p.equity_tmn ?? initialCapital`
-- [ ] فیلتر کردن مقادیر غیرمتناهی (`Number.isFinite`) و جلوگیری از تقسیم بر صفر در هنگام برابر بودن `maxEq` و `minEq`
-- [ ] نمایش خط مبنای سرمایه و برچسب‌های مالی بدون تولید `NaN`
-- [ ] آزمون‌های اعتبارسنجی خروجی SVG برای داده‌های نامعتبر، تک‌نقطه‌ای و خالی در `tests/test_dashboard.py`
+- [x] استخراج ایمن مقادیر با استفاده از زنجیره fallback: `p.total_equity ?? p.equity_tmn ?? initialCapital`
+- [x] فیلتر کردن مقادیر غیرمتناهی (`Number.isFinite`) و جلوگیری از تقسیم بر صفر در هنگام برابر بودن `maxEq` و `minEq`
+- [x] نمایش خط مبنای سرمایه و برچسب‌های مالی بدون تولید `NaN`
+- [x] آزمون‌های اعتبارسنجی خروجی SVG برای داده‌های نامعتبر، تک‌نقطه‌ای و خالی در `tests/test_dashboard.py`

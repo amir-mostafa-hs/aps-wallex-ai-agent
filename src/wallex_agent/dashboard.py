@@ -432,21 +432,49 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
             const padX = 50;
             const padY = 30;
 
-            let equities = points.map(p => Number(p.total_equity));
-            let minEq = Math.min(...equities, initialCapital);
-            let maxEq = Math.max(...equities, initialCapital);
-            let range = (maxEq - minEq) || 1.0;
-            minEq -= range * 0.05;
-            maxEq += range * 0.05;
-            range = maxEq - minEq;
+            const initialCap = (Number.isFinite(Number(initialCapital)) && Number(initialCapital) > 0) ? Number(initialCapital) : 5000000;
 
-            const getX = (i) => padX + (i / Math.max(1, points.length - 1)) * (w - 2 * padX);
-            const getY = (val) => (h - padY) - ((val - minEq) / range) * (h - 2 * padY);
+            // Safe extraction: supports total_equity, equity_tmn, or fallback to initialCap
+            let equities = points.map(p => {
+                const raw = (p && (p.total_equity ?? p.equity_tmn ?? p.equity)) ?? initialCap;
+                const num = Number(raw);
+                return Number.isFinite(num) ? num : initialCap;
+            });
 
-            const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${getX(i).toFixed(1)} ${getY(p.total_equity).toFixed(1)}`).join(' ');
-            const baseLineY = getY(initialCapital);
+            if (equities.length === 0) {
+                equities = [initialCap];
+            }
+
+            let minEq = Math.min(...equities, initialCap);
+            let maxEq = Math.max(...equities, initialCap);
+
+            if (!Number.isFinite(minEq) || !Number.isFinite(maxEq)) {
+                minEq = initialCap * 0.95;
+                maxEq = initialCap * 1.05;
+            }
+
+            let diff = maxEq - minEq;
+            if (diff <= 0 || !Number.isFinite(diff)) {
+                diff = Math.max(initialCap * 0.02, 1000.0);
+                minEq = Math.max(0, initialCap - diff);
+                maxEq = initialCap + diff;
+            } else {
+                minEq = Math.max(0, minEq - diff * 0.05);
+                maxEq = maxEq + diff * 0.05;
+            }
+            const range = (maxEq - minEq) || 1.0;
+
+            const getX = (i) => padX + (i / Math.max(1, equities.length - 1)) * (w - 2 * padX);
+            const getY = (val) => {
+                const v = Number.isFinite(Number(val)) ? Number(val) : initialCap;
+                const clamped = Math.max(minEq, Math.min(maxEq, v));
+                return (h - padY) - ((clamped - minEq) / range) * (h - 2 * padY);
+            };
+
+            const pathD = equities.map((eq, i) => `${i === 0 ? 'M' : 'L'} ${getX(i).toFixed(1)} ${getY(eq).toFixed(1)}`).join(' ');
+            const baseLineY = getY(initialCap);
             const lastEq = equities[equities.length - 1];
-            const isProfitable = lastEq >= initialCapital;
+            const isProfitable = lastEq >= initialCap;
             const strokeColor = isProfitable ? '#10b981' : '#ef4444';
             const fillGradientId = 'grad-' + containerId;
 
@@ -457,16 +485,16 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                         <stop offset="100%" stop-color="${strokeColor}" stop-opacity="0.0"/>
                     </linearGradient>
                 </defs>
-                <line x1="${padX}" y1="${getY(maxEq)}" x2="${w - padX}" y2="${getY(maxEq)}" stroke="#334155" stroke-dasharray="3,3"/>
-                <line x1="${padX}" y1="${getY(minEq)}" x2="${w - padX}" y2="${getY(minEq)}" stroke="#334155" stroke-dasharray="3,3"/>
-                <line x1="${padX}" y1="${baseLineY}" x2="${w - padX}" y2="${baseLineY}" stroke="#64748b" stroke-dasharray="4,4"/>
-                <text x="${w - padX}" y="${baseLineY - 6}" fill="#94a3b8" font-size="11" text-anchor="end">سرمایه مبنا: ${Number(initialCapital).toLocaleString()} TMN</text>
+                <line x1="${padX}" y1="${getY(maxEq).toFixed(1)}" x2="${w - padX}" y2="${getY(maxEq).toFixed(1)}" stroke="#334155" stroke-dasharray="3,3"/>
+                <line x1="${padX}" y1="${getY(minEq).toFixed(1)}" x2="${w - padX}" y2="${getY(minEq).toFixed(1)}" stroke="#334155" stroke-dasharray="3,3"/>
+                <line x1="${padX}" y1="${baseLineY.toFixed(1)}" x2="${w - padX}" y2="${baseLineY.toFixed(1)}" stroke="#64748b" stroke-dasharray="4,4"/>
+                <text x="${w - padX}" y="${(baseLineY - 6).toFixed(1)}" fill="#94a3b8" font-size="11" text-anchor="end">سرمایه مبنا: ${Number(initialCap).toLocaleString()} TMN</text>
                 <text x="${padX}" y="${padY - 8}" fill="#94a3b8" font-size="10">${Number(maxEq.toFixed(0)).toLocaleString()}</text>
                 <text x="${padX}" y="${h - padY + 16}" fill="#94a3b8" font-size="10">${Number(minEq.toFixed(0)).toLocaleString()}</text>
-                <path d="${pathD} L ${getX(points.length - 1)} ${h - padY} L ${padX} ${h - padY} Z" fill="url(#${fillGradientId})"/>
+                <path d="${pathD} L ${getX(equities.length - 1).toFixed(1)} ${h - padY} L ${padX} ${h - padY} Z" fill="url(#${fillGradientId})"/>
                 <path d="${pathD}" fill="none" stroke="${strokeColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                <circle cx="${getX(0)}" cy="${getY(equities[0])}" r="4" fill="#38bdf8"/>
-                <circle cx="${getX(points.length - 1)}" cy="${getY(lastEq)}" r="5" fill="${strokeColor}"/>
+                <circle cx="${getX(0).toFixed(1)}" cy="${getY(equities[0]).toFixed(1)}" r="4" fill="#38bdf8"/>
+                <circle cx="${getX(equities.length - 1).toFixed(1)}" cy="${getY(lastEq).toFixed(1)}" r="5" fill="${strokeColor}"/>
             </svg>`;
 
             el.innerHTML = svg;
@@ -722,3 +750,84 @@ def create_dashboard_app(harness: SystemTradingHarness, auth_token: str = "super
         return report
 
     return app
+
+
+def render_equity_svg(points: Sequence[Mapping[str, Any]], initial_capital: float = 5000000.0) -> str:
+    """Renders a standalone SVG equity curve string guaranteeing no NaN coordinates."""
+    import math
+    w, h = 760, 200
+    pad_x, pad_y = 50, 30
+
+    init_cap = float(initial_capital) if (initial_capital and initial_capital > 0) else 5000000.0
+    equities: list[float] = []
+    for p in points:
+        val = p.get("total_equity")
+        if val is None:
+            val = p.get("equity_tmn")
+        if val is None:
+            val = p.get("equity")
+        try:
+            f = float(val)
+            if math.isfinite(f) and f > 0:
+                equities.append(f)
+            else:
+                equities.append(init_cap)
+        except (ValueError, TypeError):
+            equities.append(init_cap)
+
+    if not equities:
+        equities = [init_cap]
+
+    min_eq = min(min(equities), init_cap)
+    max_eq = max(max(equities), init_cap)
+
+    diff = max_eq - min_eq
+    if diff <= 0:
+        diff = max(init_cap * 0.02, 1000.0)
+        min_eq = max(0.0, init_cap - diff)
+        max_eq = init_cap + diff
+    else:
+        min_eq = max(0.0, min_eq - diff * 0.05)
+        max_eq = max_eq + diff * 0.05
+
+    range_eq = (max_eq - min_eq) or 1.0
+
+    def get_x(i: int) -> float:
+        denom = max(1, len(equities) - 1)
+        return pad_x + (i / denom) * (w - 2 * pad_x)
+
+    def get_y(val: float) -> float:
+        clamped = max(min_eq, min(max_eq, val))
+        return (h - pad_y) - ((clamped - min_eq) / range_eq) * (h - 2 * pad_y)
+
+    path_d_parts = []
+    for i, eq in enumerate(equities):
+        cmd = "M" if i == 0 else "L"
+        path_d_parts.append(f"{cmd} {get_x(i):.1f} {get_y(eq):.1f}")
+    path_d = " ".join(path_d_parts)
+
+    baseline_y = get_y(init_cap)
+    last_eq = equities[-1]
+    is_profitable = last_eq >= init_cap
+    stroke_color = "#10b981" if is_profitable else "#ef4444"
+
+    svg = f"""<svg viewBox="0 0 {w} {h}" style="width:100%; height:auto; overflow:visible;">
+    <defs>
+        <linearGradient id="grad-equity" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="{stroke_color}" stop-opacity="0.3"/>
+            <stop offset="100%" stop-color="{stroke_color}" stop-opacity="0.0"/>
+        </linearGradient>
+    </defs>
+    <line x1="{pad_x}" y1="{get_y(max_eq):.1f}" x2="{w - pad_x}" y2="{get_y(max_eq):.1f}" stroke="#334155" stroke-dasharray="3,3"/>
+    <line x1="{pad_x}" y1="{get_y(min_eq):.1f}" x2="{w - pad_x}" y2="{get_y(min_eq):.1f}" stroke="#334155" stroke-dasharray="3,3"/>
+    <line x1="{pad_x}" y1="{baseline_y:.1f}" x2="{w - pad_x}" y2="{baseline_y:.1f}" stroke="#64748b" stroke-dasharray="4,4"/>
+    <text x="{w - pad_x}" y="{baseline_y - 6:.1f}" fill="#94a3b8" font-size="11" text-anchor="end">سرمایه مبنا: {init_cap:,.0f} TMN</text>
+    <text x="{pad_x}" y="{pad_y - 8}" fill="#94a3b8" font-size="10">{max_eq:,.0f}</text>
+    <text x="{pad_x}" y="{h - pad_y + 16}" fill="#94a3b8" font-size="10">{min_eq:,.0f}</text>
+    <path d="{path_d} L {get_x(len(equities) - 1):.1f} {h - pad_y} L {pad_x} {h - pad_y} Z" fill="url(#grad-equity)"/>
+    <path d="{path_d}" fill="none" stroke="{stroke_color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="{get_x(0):.1f}" cy="{get_y(equities[0]):.1f}" r="4" fill="#38bdf8"/>
+    <circle cx="{get_x(len(equities) - 1):.1f}" cy="{get_y(last_eq):.1f}" r="5" fill="{stroke_color}"/>
+</svg>"""
+    return svg
+
