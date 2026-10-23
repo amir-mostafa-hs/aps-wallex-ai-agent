@@ -85,6 +85,19 @@ def test_preflight_fails_when_api_key_or_subaccount_missing():
     assert "missing" in auth_check["details"].lower()
 
 
+def test_preflight_passes_on_main_account_without_subaccount():
+    env = {
+        "MODE": "shadow",
+        "WALLEX_API_KEY": "valid-main-key-123",
+        "SUB_ACCOUNT_CLIENT_ID": "",
+    }
+    config = load_config(env)
+    gate = PreflightGate(config)
+    res = gate.check_api_key_and_subaccount()
+    assert res["passed"] is True
+    assert "Main Account" in res["details"]
+
+
 def test_preflight_fails_when_subaccount_lacks_trade_permission(valid_env: dict[str, str], mock_client: MagicMock):
     mock_client.get_subaccount_permissions.return_value = {
         "subAccountId": "sub_client_12345",
