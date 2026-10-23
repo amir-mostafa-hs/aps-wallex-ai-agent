@@ -595,6 +595,7 @@ def run_simulation_backtest(
     equity_curve = telemetry.get_equity_curve()
 
     return {
+        "run_id": f"bt-{uuid.uuid4().hex[:8]}",
         "harness": harness,
         "telemetry": telemetry,
         "initial_capital_tmn": initial_cash_tmn,

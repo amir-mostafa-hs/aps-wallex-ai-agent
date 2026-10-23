@@ -6,6 +6,7 @@ from fastapi import FastAPI, Depends, HTTPException, Header, Query, Request, Bod
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from wallex_agent.harness import SystemTradingHarness, run_simulation_backtest
+from wallex_agent.backtest_engine import HistoricalBacktestEngine, fetch_or_generate_historical_candles
 from wallex_agent.preflight import PreflightGate
 from wallex_agent.config import load_config
 from wallex_agent.universe import MarketUniverse
@@ -168,9 +169,10 @@ HTML_DASHBOARD_TEMPLATE = """<!DOCTYPE html>
                 <div>
                     <label style="display: block; margin-bottom: 6px; font-size: 0.85rem; color: #94a3b8;">استراتژی معاملاتی:</label>
                     <select id="btStrategy" style="background: #0f172a; border: 1px solid var(--card-border); color: #fff; padding: 8px 12px; border-radius: 6px; width: 100%;">
-                        <option value="momentum" selected>ممانتوم پرسرعت (Momentum)</option>
+                        <option value="trend_filtered_pullback" selected>استراتژی اصلی مسابقه: پولبک با فیلتر روند (Trend Filtered Pullback)</option>
+                        <option value="momentum">ممانتوم پرسرعت (Momentum)</option>
                         <option value="trend_following">تعقیب روند صعودی (Trend Following)</option>
-                        <option value="mean_reversion">بازگشت به میانگین / پولبک (Mean Reversion)</option>
+                        <option value="mean_reversion">بازگشت به میانگین (Mean Reversion)</option>
                     </select>
                 </div>
                 <div>
@@ -657,32 +659,62 @@ def create_dashboard_app(harness: SystemTradingHarness, auth_token: str = "super
     def run_backtest_endpoint(payload: dict[str, Any] = Body(default={}), _auth: bool = Depends(verify_auth)):
         """Executes a backtest simulation and returns performance statistics."""
         cycles = int(payload.get("cycles", 50))
-        strategy_id = str(payload.get("strategy_id", "momentum")).strip()
+        strategy_id = str(payload.get("strategy_id", "trend_filtered_pullback")).strip()
         stop_distance_pct = float(payload.get("stop_distance_pct", 1.0))
         take_profit_distance_pct = float(payload.get("take_profit_distance_pct", 2.0))
-        max_holding_minutes = int(payload.get("max_holding_minutes", 5))
+        max_holding_minutes = int(payload.get("max_holding_minutes", 10))
 
-        result = run_simulation_backtest(
-            cycles=cycles,
-            strategy_id=strategy_id,
-            stop_distance_pct=stop_distance_pct,
-            take_profit_distance_pct=take_profit_distance_pct,
-            max_holding_minutes=max_holding_minutes,
-        )
-        return {
-            "initial_capital_tmn": result["initial_capital_tmn"],
-            "final_equity_tmn": result["final_equity_tmn"],
-            "gross_pnl_tmn": result["gross_pnl_tmn"],
-            "total_fees_tmn": result["total_fees_tmn"],
-            "net_pnl_tmn": result["net_pnl_tmn"],
-            "roi_pct": result["roi_pct"],
-            "strategy_id": result["strategy_id"],
-            "stop_distance_pct": result["stop_distance_pct"],
-            "take_profit_distance_pct": result["take_profit_distance_pct"],
-            "max_holding_minutes": result["max_holding_minutes"],
-            "summary": result["summary"],
-            "trades": result["trades"],
-        }
+        if strategy_id == "trend_filtered_pullback":
+            candles = fetch_or_generate_historical_candles(symbol="BTCTMN", count=max(cycles * 3, 120))
+            engine = HistoricalBacktestEngine(initial_capital_tmn=harness.initial_cash_tmn)
+            res = engine.run(
+                symbol="BTCTMN",
+                candles_1m=candles,
+                strategy_id=strategy_id,
+                stop_distance_pct=stop_distance_pct,
+                take_profit_distance_pct=take_profit_distance_pct,
+                max_holding_minutes=max_holding_minutes,
+            )
+            return {
+                "run_id": res["run_id"],
+                "initial_capital_tmn": res["initial_capital_tmn"],
+                "final_equity_tmn": res["final_equity_tmn"],
+                "gross_pnl_tmn": res["gross_pnl_tmn"],
+                "total_fees_tmn": res["total_fees_tmn"],
+                "net_pnl_tmn": res["net_pnl_tmn"],
+                "roi_pct": res["roi_pct"],
+                "strategy_id": res["strategy_id"],
+                "stop_distance_pct": res["stop_distance_pct"],
+                "take_profit_distance_pct": res["take_profit_distance_pct"],
+                "max_holding_minutes": res["max_holding_minutes"],
+                "summary": res["summary"],
+                "trades": res["trades"],
+                "equity_curve": res["equity_curve"],
+            }
+        else:
+            result = run_simulation_backtest(
+                cycles=cycles,
+                strategy_id=strategy_id,
+                stop_distance_pct=stop_distance_pct,
+                take_profit_distance_pct=take_profit_distance_pct,
+                max_holding_minutes=max_holding_minutes,
+            )
+            return {
+                "run_id": result["run_id"],
+                "initial_capital_tmn": result["initial_capital_tmn"],
+                "final_equity_tmn": result["final_equity_tmn"],
+                "gross_pnl_tmn": result["gross_pnl_tmn"],
+                "total_fees_tmn": result["total_fees_tmn"],
+                "net_pnl_tmn": result["net_pnl_tmn"],
+                "roi_pct": result["roi_pct"],
+                "strategy_id": result["strategy_id"],
+                "stop_distance_pct": result["stop_distance_pct"],
+                "take_profit_distance_pct": result["take_profit_distance_pct"],
+                "max_holding_minutes": result["max_holding_minutes"],
+                "summary": result["summary"],
+                "trades": result["trades"],
+                "equity_curve": result["equity_curve"],
+            }
 
 
     @app.get("/api/reports/audit")
