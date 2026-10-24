@@ -1,0 +1,15 @@
+{
+  "platform": "docker",
+  "app": "aps-wallex-agent",
+  "port": 8000,
+  "disks": [
+    {
+      "name": "data",
+      "mountTo": "/app/data"
+    },
+    {
+      "name": "logs",
+      "mountTo": "/app/logs"
+    }
+  ]
+}

@@ -6,7 +6,12 @@ import time
 import os
 import threading
 from typing import Sequence
-import dotenv
+try:
+    import dotenv
+    if dotenv:
+        dotenv.load_dotenv()
+except ImportError:
+    dotenv = None
 
 from wallex_agent.config import load_config, AppConfig
 from wallex_agent.universe import MarketUniverse
@@ -21,7 +26,8 @@ from wallex_agent.market_data_adapter import WallexMarketDataAdapter
 
 def run_preflight_cmd(args: argparse.Namespace) -> int:
     """Executes preflight verification checks and outputs status table."""
-    dotenv.load_dotenv()
+    if dotenv:
+        dotenv.load_dotenv()
     print("=" * 60)
     print(" WALLEX OPPORTUNITY AGENT - PREFLIGHT VERIFICATION GATE")
     print("=" * 60)
@@ -60,7 +66,8 @@ def run_preflight_cmd(args: argparse.Namespace) -> int:
 
 def run_backtest_cmd(args: argparse.Namespace) -> int:
     """Executes multi-scenario historical backtest and prints performance report."""
-    dotenv.load_dotenv()
+    if dotenv:
+        dotenv.load_dotenv()
     cycles_to_run = getattr(args, "cycles", 50)
     strategy = getattr(args, "strategy", "trend_filtered_pullback")
     print("=" * 60)
@@ -102,7 +109,8 @@ def run_backtest_cmd(args: argparse.Namespace) -> int:
 
 def run_shadow_cmd(args: argparse.Namespace) -> int:
     """Starts the agent in Shadow mode with real-time Dashboard."""
-    dotenv.load_dotenv()
+    if dotenv:
+        dotenv.load_dotenv()
     print("=" * 60)
     print(" WALLEX OPPORTUNITY AGENT - SHADOW MODE RUNNER")
     print("=" * 60)
@@ -168,7 +176,7 @@ def run_shadow_cmd(args: argparse.Namespace) -> int:
     dashboard_app = create_dashboard_app(harness=harness, auth_token=auth_token)
 
     port = int(os.environ.get("DASHBOARD_PORT", "8000"))
-    host = os.environ.get("DASHBOARD_BIND", "127.0.0.1")
+    host = os.environ.get("DASHBOARD_BIND", "0.0.0.0")
 
     # Start FastAPI dashboard in background thread
     import uvicorn
@@ -245,7 +253,8 @@ def run_shadow_cmd(args: argparse.Namespace) -> int:
 
 def run_report_cmd(args: argparse.Namespace) -> int:
     """Reads telemetry database and displays performance audit report."""
-    dotenv.load_dotenv()
+    if dotenv:
+        dotenv.load_dotenv()
     db_path = os.environ.get("SQLITE_DB_PATH", "wallex_agent.db")
     if not os.path.exists(db_path):
         print(f"[WARN] No telemetry database found at: {db_path}")

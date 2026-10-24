@@ -15,13 +15,24 @@ services:
       - DASHBOARD_BIND=0.0.0.0
       - DASHBOARD_PORT=8000
       - SQLITE_DB_PATH=/app/data/wallex_agent.db
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./docs/sources:/app/docs/sources:ro
+      - wallex_data:/app/data
+      - wallex_logs:/app/logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/')"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 5s
+      start_period: 10s
+
+volumes:
+  wallex_data:
+    name: wallex_agent_data
+  wallex_logs:
+    name: wallex_agent_logs

@@ -124,12 +124,12 @@ def test_strategy_proportional_ema_on_short_5m_history():
     candles_1m = _generate_synthetic_candles(base_price=100000.0, trend_pct=0.15, count=46)
     last_p = candles_1m[-1]["close"]
     for i in range(3):
-        last_p *= 0.998
+        last_p *= 0.997
         candles_1m.append({
             "timestamp": candles_1m[-1]["timestamp"] + 60,
             "open": last_p * 1.001,
             "high": last_p * 1.002,
-            "low": last_p * 0.997,
+            "low": last_p * 0.995,
             "close": last_p,
             "volume": 50.0,
         })

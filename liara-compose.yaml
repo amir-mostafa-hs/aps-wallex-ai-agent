@@ -1,0 +1,21 @@
+apps:
+  - id: "aps-wallex-agent"
+    name: "Wallex Opportunity Agent"
+    image: "aps-wallex-agent:latest"
+    bundlePlanID: "standard"
+    planID: "small-g2"
+    port: 8000
+    disks:
+      - name: "data"
+        mountTo: "/app/data"
+      - name: "logs"
+        mountTo: "/app/logs"
+    envs:
+      WALLEX_API_KEY: ""
+      DASHBOARD_ACCESS_TOKEN: ""
+      MODE: "shadow"
+      LIVE_TRADING_ENABLED: "false"
+      LIVE_PREFLIGHT_ACKNOWLEDGED: "false"
+      DASHBOARD_BIND: "0.0.0.0"
+      DASHBOARD_PORT: "8000"
+      SQLITE_DB_PATH: "/app/data/wallex_agent.db"
