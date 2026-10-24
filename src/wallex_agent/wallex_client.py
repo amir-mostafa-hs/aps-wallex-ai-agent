@@ -31,6 +31,8 @@ class WallexExchangeClient:
     def _get_headers(self) -> dict[str, str]:
         headers = {
             "X-API-Key": self.api_key,
+            "x-api-key": self.api_key,
+            "Accept": "application/json",
             "Content-Type": "application/json",
         }
         if self.sub_account_client_id:

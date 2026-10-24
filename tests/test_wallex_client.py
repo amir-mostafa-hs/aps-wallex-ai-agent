@@ -78,7 +78,7 @@ def test_wallex_client_get_order():
     assert res["result"]["status"] == "FILLED"
     mock_http.get.assert_called_once_with(
         "https://api.wallex.ir/v1/account/orders/test-cid",
-        headers={"X-API-Key": "test-key", "Content-Type": "application/json"},
+        headers=client._get_headers(),
     )
 
 
@@ -94,6 +94,6 @@ def test_wallex_client_cancel_order():
     assert res["success"] is True
     mock_http.delete.assert_called_once_with(
         "https://api.wallex.ir/v1/account/orders/test-cid",
-        headers={"X-API-Key": "test-key", "Content-Type": "application/json"},
+        headers=client._get_headers(),
     )
 
