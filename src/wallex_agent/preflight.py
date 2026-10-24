@@ -289,6 +289,18 @@ class PreflightGate:
             }
 
     def check_credit_package_expiration(self) -> tuple[PreflightCheckResult, str | None, str | None]:
+        # If operating on a direct main account without sub-account, prop package expiration does not apply
+        if not self.config.get("sub_account_client_id"):
+            return (
+                {
+                    "name": "credit_package_expiration",
+                    "passed": True,
+                    "details": "Operating on direct main account (no prop package expiration schedule).",
+                },
+                None,
+                None,
+            )
+
         if not self.client or not hasattr(self.client, "get_active_package"):
             # If live mode, active package endpoint is mandatory
             if self.config["mode"] == "live":

@@ -223,3 +223,14 @@ def test_preflight_verifies_package_history_and_subaccount_matching(valid_env: d
 
     assert check["passed"] is False
     assert "does not match" in check["details"].lower() or "not matched" in check["details"].lower()
+
+
+def test_preflight_passes_credit_package_expiration_for_direct_main_account(valid_env: dict[str, str]):
+    main_env = dict(valid_env)
+    main_env["SUB_ACCOUNT_CLIENT_ID"] = ""
+    config = load_config(main_env)
+    gate = PreflightGate(config, client=None)
+    check, expire_iso, cutoff_iso = gate.check_credit_package_expiration()
+    assert check["passed"] is True
+    assert "direct main account" in check["details"].lower()
+

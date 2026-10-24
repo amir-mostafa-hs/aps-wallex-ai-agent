@@ -826,7 +826,18 @@ def create_dashboard_app(harness: SystemTradingHarness, auth_token: str = "super
     def run_preflight_endpoint(_auth: bool = Depends(verify_auth)):
         """Runs preflight verification checks and returns detailed checklist."""
         cfg = load_config()
-        gate = PreflightGate(cfg)
+        client = getattr(harness, "exchange_client", None)
+        if (client is None or not hasattr(client, "get_active_package")) and cfg.get("wallex_api_key"):
+            try:
+                from wallex_agent.wallex_client import WallexExchangeClient
+                client = WallexExchangeClient(
+                    api_key=cfg["wallex_api_key"],
+                    sub_account_client_id=cfg.get("sub_account_client_id", ""),
+                    base_url=cfg.get("wallex_base_url", "https://api.wallex.ir"),
+                )
+            except Exception:
+                client = None
+        gate = PreflightGate(cfg, client=client)
         report = gate.run_all_checks()
         return report
 
