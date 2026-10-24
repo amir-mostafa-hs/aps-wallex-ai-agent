@@ -130,9 +130,12 @@ def run_shadow_cmd(args: argparse.Namespace) -> int:
         print(f"[FAIL] Configuration load error: {exc}")
         return 1
 
-    target_mode = getattr(args, "command", None) or config.get("mode", "shadow")
-    if target_mode not in ("shadow", "live"):
-        target_mode = config.get("mode", "shadow")
+    configured_mode = config.get("mode", "shadow").lower()
+    cmd = getattr(args, "command", None)
+    if cmd == "live" or configured_mode == "live":
+        target_mode = "live"
+    else:
+        target_mode = "shadow"
 
     print("=" * 60)
     print(f" WALLEX OPPORTUNITY AGENT - {target_mode.upper()} MODE RUNNER")
@@ -193,9 +196,23 @@ def run_shadow_cmd(args: argparse.Namespace) -> int:
     except Exception as exc:
         initial_prices = {}
 
+    initial_cash_tmn = 5000000.0
+    if target_mode == "live" and wallex_client:
+        try:
+            balances_data = wallex_client.get_account_balances()
+            b_dict = balances_data.get("result", {}).get("balances", {})
+            tmn_val = b_dict.get("TMN", {}).get("value") or b_dict.get("IRT", {}).get("value")
+            if tmn_val is not None:
+                parsed_cash = float(tmn_val)
+                if parsed_cash > 0:
+                    initial_cash_tmn = parsed_cash
+                    print(f"[INFO] Live Wallex account balance synchronized: {initial_cash_tmn:,.0f} TMN")
+        except Exception as exc:
+            print(f"[WARN] Could not parse live balance from Wallex API, using default {initial_cash_tmn:,.0f} TMN: {exc}")
+
     harness = SystemTradingHarness(
         mode=target_mode,
-        initial_cash_tmn=5000000.0,
+        initial_cash_tmn=initial_cash_tmn,
         universe=universe,
         decision_agent=DecisionAgent(heuristic_mode=True),
         risk_engine=RiskEngine(
@@ -362,7 +379,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "preflight":
         return run_preflight_cmd(args)
-    elif args.command in ("shadow", "live"):
+    elif args.command in ("shadow", "live") or args.command is None:
         return run_shadow_cmd(args)
     elif args.command == "backtest":
         return run_backtest_cmd(args)

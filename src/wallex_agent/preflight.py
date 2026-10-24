@@ -313,6 +313,16 @@ class PreflightGate:
 
         try:
             pkg = self.client.get_active_package()
+            if not pkg or not isinstance(pkg, dict):
+                return (
+                    {
+                        "name": "credit_package_expiration",
+                        "passed": True,
+                        "details": "Operating on direct main account (no prop package expiration schedule).",
+                    },
+                    None,
+                    None,
+                )
             raw_expire = pkg.get("expireAt")
             if not raw_expire:
                 return (
