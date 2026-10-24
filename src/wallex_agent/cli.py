@@ -38,7 +38,19 @@ def run_preflight_cmd(args: argparse.Namespace) -> int:
         print(f"[FAIL] Configuration error: {exc}")
         return 1
 
-    gate = PreflightGate(config)
+    wallex_client = None
+    if config.get("wallex_api_key"):
+        try:
+            from wallex_agent.wallex_client import WallexExchangeClient
+            wallex_client = WallexExchangeClient(
+                api_key=config["wallex_api_key"],
+                sub_account_client_id=config.get("sub_account_client_id", ""),
+                base_url=config.get("wallex_base_url", "https://api.wallex.ir"),
+            )
+        except Exception:
+            wallex_client = None
+
+    gate = PreflightGate(config, client=wallex_client)
     report = gate.run_all_checks()
 
     print(f"\nTarget Mode: {config['mode'].upper()}")
@@ -108,12 +120,9 @@ def run_backtest_cmd(args: argparse.Namespace) -> int:
 
 
 def run_shadow_cmd(args: argparse.Namespace) -> int:
-    """Starts the agent in Shadow mode with real-time Dashboard."""
+    """Starts the agent in Shadow or Live mode with real-time Dashboard."""
     if dotenv:
         dotenv.load_dotenv()
-    print("=" * 60)
-    print(" WALLEX OPPORTUNITY AGENT - SHADOW MODE RUNNER")
-    print("=" * 60)
 
     try:
         config = load_config()
@@ -121,10 +130,37 @@ def run_shadow_cmd(args: argparse.Namespace) -> int:
         print(f"[FAIL] Configuration load error: {exc}")
         return 1
 
+    target_mode = getattr(args, "command", None) or config.get("mode", "shadow")
+    if target_mode not in ("shadow", "live"):
+        target_mode = config.get("mode", "shadow")
+
+    print("=" * 60)
+    print(f" WALLEX OPPORTUNITY AGENT - {target_mode.upper()} MODE RUNNER")
+    print("=" * 60)
+
+    wallex_client = None
+    if config.get("wallex_api_key"):
+        try:
+            from wallex_agent.wallex_client import WallexExchangeClient
+            wallex_client = WallexExchangeClient(
+                api_key=config["wallex_api_key"],
+                sub_account_client_id=config.get("sub_account_client_id", ""),
+                base_url=config.get("wallex_base_url", "https://api.wallex.ir"),
+            )
+        except Exception as exc:
+            print(f"[WARN] Failed to initialize WallexExchangeClient: {exc}")
+
     # Preflight validation check
-    gate = PreflightGate(config)
+    gate = PreflightGate(config, client=wallex_client)
     report = gate.run_all_checks()
-    if not report["all_passed"]:
+    if target_mode == "live":
+        try:
+            gate.enforce_or_raise(report)
+            print("[INFO] All Preflight safety gates passed for LIVE execution.")
+        except Exception as exc:
+            print(f"\n[FATAL] LIVE MODE PREFLIGHT FAILED: {exc}")
+            return 1
+    elif not report["all_passed"]:
         print("[WARN] Some preflight checks raised warnings:")
         for c in report["checks"]:
             if not c["passed"]:
@@ -158,7 +194,7 @@ def run_shadow_cmd(args: argparse.Namespace) -> int:
         initial_prices = {}
 
     harness = SystemTradingHarness(
-        mode="shadow",
+        mode=target_mode,
         initial_cash_tmn=5000000.0,
         universe=universe,
         decision_agent=DecisionAgent(heuristic_mode=True),
@@ -170,6 +206,7 @@ def run_shadow_cmd(args: argparse.Namespace) -> int:
         ),
         telemetry_store=telemetry,
         initial_prices=initial_prices,
+        exchange_client=wallex_client if target_mode == "live" else None,
     )
 
     auth_token = (os.environ.get("DASHBOARD_ACCESS_TOKEN") or "").strip() or "super-secret-token"
@@ -310,6 +347,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     # shadow
     subparsers.add_parser("shadow", help="Run in Shadow mode with real-time UI dashboard")
 
+    # live
+    subparsers.add_parser("live", help="Run in Live mode with real order execution and UI dashboard")
+
     # backtest
     bt_parser = subparsers.add_parser("backtest", help="Run historical backtest simulation")
     bt_parser.add_argument("--cycles", type=int, default=50, help="Number of simulation cycles")
@@ -322,7 +362,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "preflight":
         return run_preflight_cmd(args)
-    elif args.command == "shadow":
+    elif args.command in ("shadow", "live"):
         return run_shadow_cmd(args)
     elif args.command == "backtest":
         return run_backtest_cmd(args)
